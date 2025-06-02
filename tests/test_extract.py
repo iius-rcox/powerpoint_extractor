@@ -1,5 +1,4 @@
 import sys
-import base64
 from types import SimpleNamespace, ModuleType
 from unittest.mock import patch
 
@@ -80,7 +79,7 @@ def test_accepts_pptx_without_extension(mock_get):
     assert res.status_code == 200
     data = res.json()
     assert data["filename"] == "file.pptx"
-    assert data["file_content"] == base64.b64encode(b"content").decode("utf-8")
+    assert "file_content" not in data
     assert data["slide_count"] == 1
 
 
