@@ -43,8 +43,6 @@ class ExtractResponse(BaseModel):
 @app.post("/extract", response_model=ExtractResponse)
 def extract_notes(request: ExtractRequest):
     url = request.file_url
-    if not url.path.endswith(".pptx"):
-        raise HTTPException(status_code=422, detail="Only .pptx files are supported")
 
     try:
         response = requests.get(url)
@@ -53,12 +51,16 @@ def extract_notes(request: ExtractRequest):
         logger.error("Failed to download file: %s", exc)
         raise HTTPException(status_code=400, detail="Unable to download file") from exc
 
+    content_type = response.headers.get("Content-Type", "")
+    if content_type and "presentation" not in content_type and "ppt" not in content_type:
+        raise HTTPException(status_code=422, detail="Only .pptx files are supported")
+
+    pptx_bytes = io.BytesIO(response.content)
     try:
-        pptx_bytes = io.BytesIO(response.content)
         presentation = Presentation(pptx_bytes)
     except Exception as exc:  # pylint: disable=broad-except
         logger.error("Failed to parse PowerPoint file: %s", exc)
-        raise HTTPException(status_code=400, detail="Invalid PowerPoint file") from exc
+        raise HTTPException(status_code=422, detail="Only .pptx files are supported") from exc
 
     slides_data: List[SlideData] = []
     for idx, slide in enumerate(presentation.slides, start=1):
