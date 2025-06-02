@@ -4,7 +4,7 @@ This API extracts slide titles and notes from `.pptx` files. It is built with **
 
 ## Features
 
-- **POST `/extract`** – Accepts a JSON payload with a `file_url` pointing to a downloadable `.pptx` file. Returns the slide titles and speaker notes.
+- **POST `/extract`** – Accepts a JSON payload with `file_url` and `file_name`. The `file_url` should point to a downloadable `.pptx` file while `file_name` will be returned in the response. Returns the slide titles and speaker notes.
 - Validation for supported file types and error handling for download/parse failures.
 - CORS enabled for testing purposes.
 - Suitable for running locally with `uvicorn` or in production with `gunicorn`.
@@ -34,7 +34,7 @@ gunicorn -w 4 -k uvicorn.workers.UvicornWorker extractor_api:app
 ```bash
 curl -X POST http://localhost:8000/extract \
   -H "Content-Type: application/json" \
-  -d '{"file_url": "https://example.com/sample.pptx"}'
+  -d '{"file_url": "https://example.com/sample.pptx", "file_name": "sample.pptx"}'
 ```
 
-The response contains the filename, total slide count, and an array of slide data with titles and notes (if present).
+The response echoes the provided `file_name` as `filename`, includes the total slide count, and an array of slide data with titles and notes (if present).

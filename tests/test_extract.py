@@ -72,9 +72,13 @@ def test_accepts_pptx_without_extension(mock_get):
         "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     }
     mock_get.return_value = _mock_response(b"content", headers)
-    res = client.post("/extract", json={"file_url": "https://example.com/file"})
+    res = client.post(
+        "/extract",
+        json={"file_url": "https://example.com/file", "file_name": "file.pptx"},
+    )
     assert res.status_code == 200
     data = res.json()
+    assert data["filename"] == "file.pptx"
     assert data["slide_count"] == 1
 
 
@@ -83,6 +87,9 @@ def test_accepts_pptx_without_extension(mock_get):
 def test_invalid_pptx_returns_422(mock_get):
     headers = {"Content-Type": "text/plain"}
     mock_get.return_value = _mock_response(b"bad", headers)
-    res = client.post("/extract", json={"file_url": "https://example.com/file"})
+    res = client.post(
+        "/extract",
+        json={"file_url": "https://example.com/file", "file_name": "file.pptx"},
+    )
     assert res.status_code == 422
     assert res.json()["detail"] == "Only .pptx files are supported"

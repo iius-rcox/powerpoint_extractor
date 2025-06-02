@@ -26,6 +26,7 @@ logging.basicConfig(level=logging.INFO)
 
 class ExtractRequest(BaseModel):
     file_url: HttpUrl
+    file_name: str
 
 
 class SlideData(BaseModel):
@@ -80,7 +81,7 @@ def extract_notes(request: ExtractRequest):
             )
         )
 
-    filename = url.path.split("/")[-1]
+    filename = request.file_name
     return ExtractResponse(
         filename=filename,
         slide_count=len(slides_data),
