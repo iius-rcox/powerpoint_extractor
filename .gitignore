@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+*.pptx
+
+# IDE files
+.vscode/
+.idea/
