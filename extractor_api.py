@@ -1,7 +1,5 @@
 import io
 import logging
-import base64
-import os
 from typing import List, Optional
 
 import requests
@@ -46,7 +44,6 @@ class SlideData(BaseModel):
 
 class ExtractResponse(BaseModel):
     filename: str
-    file_content: str
     slide_count: int
     slides: List[SlideData]
 
@@ -71,7 +68,6 @@ def extract_notes(request: ExtractRequest):
         raise HTTPException(status_code=422, detail="Only .pptx files are supported")
 
     pptx_bytes = io.BytesIO(response.content)
-    file_content = base64.b64encode(response.content).decode("utf-8")
     try:
         presentation = Presentation(pptx_bytes)
     except Exception as exc:  # pylint: disable=broad-except
@@ -101,7 +97,6 @@ def extract_notes(request: ExtractRequest):
     filename = request.file_name
     return ExtractResponse(
         filename=filename,
-        file_content=file_content,
         slide_count=len(slides_data),
         slides=slides_data,
     )
