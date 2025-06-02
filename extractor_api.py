@@ -22,7 +22,10 @@ app.add_middleware(
 )
 
 logger = logging.getLogger("pptx_extractor")
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
 
 
 class ExtractRequest(BaseModel):
@@ -46,16 +49,20 @@ class ExtractResponse(BaseModel):
 @app.post("/extract", response_model=ExtractResponse)
 def extract_notes(request: ExtractRequest):
     url = request.file_url
+    logger.info("Extraction requested for %s", url)
 
     try:
         response = requests.get(url)
         response.raise_for_status()
+        logger.debug("Downloaded %d bytes", len(response.content))
     except requests.RequestException as exc:
-        logger.error("Failed to download file: %s", exc)
-        raise HTTPException(status_code=400, detail="Unable to download file") from exc
+        logger.exception("Failed to download file from %s", url)
+        raise HTTPException(status_code=400, detail=f"Unable to download file: {exc}") from exc
 
     content_type = response.headers.get("Content-Type", "")
+    logger.debug("Content-Type received: %s", content_type)
     if content_type and "presentation" not in content_type and "ppt" not in content_type:
+        logger.warning("Unsupported content type: %s", content_type)
         raise HTTPException(status_code=422, detail="Only .pptx files are supported")
 
     pptx_bytes = io.BytesIO(response.content)
@@ -63,8 +70,8 @@ def extract_notes(request: ExtractRequest):
     try:
         presentation = Presentation(pptx_bytes)
     except Exception as exc:  # pylint: disable=broad-except
-        logger.error("Failed to parse PowerPoint file: %s", exc)
-        raise HTTPException(status_code=422, detail="Only .pptx files are supported") from exc
+        logger.exception("Failed to parse PowerPoint file")
+        raise HTTPException(status_code=422, detail="Invalid .pptx file") from exc
 
     slides_data: List[SlideData] = []
     for idx, slide in enumerate(presentation.slides, start=1):
@@ -83,6 +90,8 @@ def extract_notes(request: ExtractRequest):
                 notes_text=notes_text,
             )
         )
+
+    logger.info("Successfully extracted %d slides", len(slides_data))
 
     filename = request.file_name
     return ExtractResponse(
