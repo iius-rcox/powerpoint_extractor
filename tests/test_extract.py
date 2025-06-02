@@ -66,6 +66,7 @@ class FailingPresentation:
         raise ValueError("bad file")
 
 
+@patch("extractor_api.TIMEOUT", 5)
 @patch("extractor_api.requests.get")
 @patch("extractor_api.Presentation", DummyPresentation)
 def test_accepts_pptx_without_extension(mock_get):
@@ -78,12 +79,14 @@ def test_accepts_pptx_without_extension(mock_get):
         json={"file_url": "https://example.com/file", "file_name": "file.pptx"},
     )
     assert res.status_code == 200
+    mock_get.assert_called_once_with("https://example.com/file", timeout=5)
     data = res.json()
     assert data["filename"] == "file.pptx"
     assert data["file_content"] == base64.b64encode(b"content").decode("utf-8")
     assert data["slide_count"] == 1
 
 
+@patch("extractor_api.TIMEOUT", 5)
 @patch("extractor_api.requests.get")
 @patch("extractor_api.Presentation", FailingPresentation)
 def test_invalid_pptx_returns_422(mock_get):
@@ -95,3 +98,4 @@ def test_invalid_pptx_returns_422(mock_get):
     )
     assert res.status_code == 422
     assert res.json()["detail"] == "Only .pptx files are supported"
+    mock_get.assert_called_once_with("https://example.com/file", timeout=5)
