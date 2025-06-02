@@ -26,6 +26,10 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
 
+# Allow the request timeout to be configured via an environment variable.
+# Defaults to 10 seconds if not provided.
+TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "10"))
+
 
 class ExtractRequest(BaseModel):
     file_url: HttpUrl
@@ -50,7 +54,7 @@ def extract_notes(request: ExtractRequest):
     logger.info("Extraction requested for %s", url)
 
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=TIMEOUT)
         response.raise_for_status()
         logger.debug("Downloaded %d bytes", len(response.content))
     except requests.RequestException as exc:

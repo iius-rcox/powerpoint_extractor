@@ -21,6 +21,9 @@ pip install -r requirements.txt
 python extractor_api.py  # Runs with uvicorn on port 8000
 ```
 
+Set `REQUEST_TIMEOUT` to control the download timeout (in seconds). The default
+is `10` seconds.
+
 ## Deployment
 
 For Azure App Service, configure the startup command:
