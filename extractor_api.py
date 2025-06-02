@@ -1,5 +1,6 @@
 import io
 import logging
+import os
 from typing import List, Optional
 
 import requests
@@ -27,9 +28,8 @@ logging.basicConfig(
 )
 
 # Allow the request timeout to be configured via an environment variable.
-# Defaults to 10 seconds if not provided.
-TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "10"))
-
+# Defaults to 60 seconds if not provided.
+TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "60"))
 
 class ExtractRequest(BaseModel):
     file_url: HttpUrl

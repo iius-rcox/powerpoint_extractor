@@ -22,7 +22,7 @@ python extractor_api.py  # Runs with uvicorn on port 8000
 ```
 
 Set `REQUEST_TIMEOUT` to control the download timeout (in seconds). The default
-is `10` seconds.
+is `60` seconds.
 
 ## Deployment
 
