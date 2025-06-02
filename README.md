@@ -4,7 +4,7 @@ This API extracts slide titles and notes from `.pptx` files. It is built with **
 
 ## Features
 
-- **POST `/extract`** – Accepts a JSON payload with `file_url` and `file_name`. The `file_url` should point to a downloadable `.pptx` file while `file_name` will be returned in the response. Returns the slide titles, speaker notes, and the original file content in base64.
+- **POST `/extract`** – Accepts a JSON payload with `file_url` and `file_name`. The `file_url` should point to a downloadable `.pptx` file while `file_name` will be returned in the response. Returns the slide titles and speaker notes for each slide.
 - Validation for supported file types and error handling for download/parse failures.
 - CORS enabled for testing purposes.
 - Suitable for running locally with `uvicorn` or in production with `gunicorn`.
@@ -37,4 +37,4 @@ curl -X POST http://localhost:8000/extract \
   -d '{"file_url": "https://example.com/sample.pptx", "file_name": "sample.pptx"}'
 ```
 
-The response echoes the provided `file_name` as `filename`, includes the base64 encoded PowerPoint data in `file_content`, the total slide count, and an array of slide data with titles and notes (if present).
+The response echoes the provided `file_name` as `filename` and returns the total slide count along with an array of slide data containing titles and notes when present.
