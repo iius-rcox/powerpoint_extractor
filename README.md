@@ -27,7 +27,10 @@ Set `REQUEST_TIMEOUT` to control the download timeout (in seconds). The default
 is `60` seconds.
 ## Environment Variables
 
-- `GRAPH_TOKEN` (required): OAuth bearer token for Microsoft Graph. Export it before running the server, e.g. `export GRAPH_TOKEN=XXXXX`.
+You can authenticate with Microsoft Graph using either a pre-generated OAuth token or client credentials.
+
+- `GRAPH_TOKEN` (optional): OAuth bearer token for Microsoft Graph.
+- `GRAPH_CLIENT_ID`, `GRAPH_TENANT_ID`, `GRAPH_CLIENT_SECRET` (optional): if set, the API obtains a token automatically using the client credentials flow.
 - `REQUEST_TIMEOUT` (optional): timeout in seconds when downloading files. Default is `60`.
 
 
@@ -52,7 +55,8 @@ The response echoes the provided `file_name` as `filename` and returns the total
 ### Example Combine Request
 
 ```bash
-GRAPH_TOKEN=YOUR_TOKEN curl -X POST http://localhost:8000/combine \
+# Ensure GRAPH_TOKEN or the client credential variables are set
+curl -X POST http://localhost:8000/combine \
   -H "Content-Type: application/json" \
   -d '{"drive_id": "<drive>", "folder_id": "<folder>", "pptx_file_id": "<id>"}'
 ```
