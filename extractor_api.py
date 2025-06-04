@@ -6,7 +6,6 @@ import tempfile
 from pathlib import Path
 from typing import List, Optional
 
-import glob
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
