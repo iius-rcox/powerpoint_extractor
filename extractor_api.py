@@ -189,9 +189,12 @@ def combine_presentation(request: CombineRequest):
                 "default=noprint_wrappers=1:nokey=1",
                 str(audio_path),
             ]
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, check=True
-            )
+            try:
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, check=True
+                )
+            except FileNotFoundError as exc:
+                raise HTTPException(status_code=500, detail="ffprobe not installed") from exc
             durations.append(float(result.stdout.strip()))
 
         slides_dir = tmp_path / "slides"
@@ -209,6 +212,8 @@ def combine_presentation(request: CombineRequest):
                 ],
                 check=True,
             )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=500, detail="libreoffice not installed") from exc
         except subprocess.CalledProcessError as exc:
             logger.exception("Slide image conversion failed")
             raise HTTPException(status_code=500, detail="PPTX conversion failed") from exc
@@ -274,6 +279,8 @@ def combine_presentation(request: CombineRequest):
 
         try:
             subprocess.run(cmd, check=True)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=500, detail="ffmpeg not installed") from exc
         except subprocess.CalledProcessError as exc:
             logger.exception("ffmpeg failed")
             raise HTTPException(status_code=500, detail="Video generation failed") from exc
