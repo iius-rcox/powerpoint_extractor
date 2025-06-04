@@ -14,6 +14,7 @@ This API extracts slide titles and notes from `.pptx` files. It is built with **
 
 - Python 3.9+
 - See `requirements.txt` for Python packages.
+- `ffmpeg` and `libreoffice` are required for the `/combine` endpoint.
 
 ## Running Locally
 
@@ -24,6 +25,11 @@ python extractor_api.py  # Runs with uvicorn on port 8000
 
 Set `REQUEST_TIMEOUT` to control the download timeout (in seconds). The default
 is `60` seconds.
+## Environment Variables
+
+- `GRAPH_TOKEN` (required): OAuth bearer token for Microsoft Graph. Export it before running the server, e.g. `export GRAPH_TOKEN=XXXXX`.
+- `REQUEST_TIMEOUT` (optional): timeout in seconds when downloading files. Default is `60`.
+
 
 ## Deployment
 
@@ -46,7 +52,7 @@ The response echoes the provided `file_name` as `filename` and returns the total
 ### Example Combine Request
 
 ```bash
-curl -X POST http://localhost:8000/combine \
+GRAPH_TOKEN=YOUR_TOKEN curl -X POST http://localhost:8000/combine \
   -H "Content-Type: application/json" \
   -d '{"drive_id": "<drive>", "folder_id": "<folder>", "pptx_file_id": "<id>"}'
 ```
