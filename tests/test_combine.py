@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 from fastapi.testclient import TestClient
+
 import extractor_api
 
 client = TestClient(extractor_api.app)
