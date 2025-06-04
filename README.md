@@ -5,6 +5,7 @@ This API extracts slide titles and notes from `.pptx` files. It is built with **
 ## Features
 
 - **POST `/extract`** – Accepts a JSON payload with `file_url` and `file_name`. The `file_url` should point to a downloadable `.pptx` file while `file_name` will be returned in the response. Returns the slide titles and speaker notes for each slide.
+- **POST `/combine`** – Takes a `drive_id`, `folder_id` and `pptx_file_id` and produces an MP4 by downloading the PPTX and slide audio from SharePoint, creating slide images and stitching them together with 2 s crossfades. The resulting video is uploaded back to SharePoint and the URL returned.
 - Validation for supported file types and error handling for download/parse failures.
 - CORS enabled for testing purposes.
 - Suitable for running locally with `uvicorn` or in production with `gunicorn`.
@@ -41,3 +42,11 @@ curl -X POST http://localhost:8000/extract \
 ```
 
 The response echoes the provided `file_name` as `filename` and returns the total slide count along with an array of slide data containing titles and notes when present.
+
+### Example Combine Request
+
+```bash
+curl -X POST http://localhost:8000/combine \
+  -H "Content-Type: application/json" \
+  -d '{"drive_id": "<drive>", "folder_id": "<folder>", "pptx_file_id": "<id>"}'
+```

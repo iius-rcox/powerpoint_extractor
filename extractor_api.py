@@ -1,13 +1,24 @@
 import io
 import logging
 import os
+import subprocess
+import tempfile
+from pathlib import Path
 from typing import List, Optional
 
+import glob
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl
 from pptx import Presentation
+
+from graph_utils import (
+    download_file_from_graph,
+    upload_file_to_graph,
+    list_folder_children,
+    get_item_name,
+)
 
 
 app = FastAPI(title="PowerPoint Notes Extraction API")
@@ -46,6 +57,18 @@ class ExtractResponse(BaseModel):
     filename: str
     slide_count: int
     slides: List[SlideData]
+
+
+class CombineRequest(BaseModel):
+    drive_id: str
+    folder_id: str
+    pptx_file_id: str
+
+
+class CombineResponse(BaseModel):
+    status: str
+    video_filename: str
+    upload_url: str
 
 
 @app.post("/extract", response_model=ExtractResponse)
@@ -99,6 +122,176 @@ def extract_notes(request: ExtractRequest):
         filename=filename,
         slide_count=len(slides_data),
         slides=slides_data,
+    )
+
+
+@app.post("/combine", response_model=CombineResponse)
+def combine_presentation(request: CombineRequest):
+    """Combine a PPTX presentation with per-slide audio into a video."""
+    logger.info(
+        "Combining PPTX %s in drive %s with audio from folder %s",
+        request.pptx_file_id,
+        request.drive_id,
+        request.folder_id,
+    )
+
+    drive_id = request.drive_id
+    folder_id = request.folder_id
+    pptx_id = request.pptx_file_id
+
+    try:
+        pptx_bytes = download_file_from_graph(drive_id, pptx_id)
+        pptx_name = get_item_name(drive_id, pptx_id)
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.exception("Failed to download PPTX from Graph")
+        raise HTTPException(status_code=400, detail="Unable to download PPTX") from exc
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        pptx_path = tmp_path / "presentation.pptx"
+        with open(pptx_path, "wb") as pptx_file:
+            pptx_file.write(pptx_bytes)
+
+        # Retrieve MP3 metadata from the folder
+        try:
+            children = list_folder_children(drive_id, folder_id)
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.exception("Failed to list folder contents")
+            raise HTTPException(status_code=400, detail="Unable to list folder") from exc
+
+        audio_items = [
+            item for item in children if item.get("name", "").lower().endswith(".mp3")
+        ]
+        if not audio_items:
+            raise HTTPException(status_code=400, detail="No MP3 files found")
+
+        # Sort by slide number based on filename pattern slide_<n>.mp3
+        audio_items.sort(
+            key=lambda x: int(Path(x["name"]).stem.split("_")[-1])
+        )
+
+        audio_paths: List[Path] = []
+        durations: List[float] = []
+        for item in audio_items:
+            audio_bytes = download_file_from_graph(drive_id, item["id"])
+            audio_path = tmp_path / item["name"]
+            with open(audio_path, "wb") as audio_file:
+                audio_file.write(audio_bytes)
+            audio_paths.append(audio_path)
+
+            cmd = [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(audio_path),
+            ]
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, check=True
+            )
+            durations.append(float(result.stdout.strip()))
+
+        slides_dir = tmp_path / "slides"
+        slides_dir.mkdir(exist_ok=True)
+        try:
+            subprocess.run(
+                [
+                    "libreoffice",
+                    "--headless",
+                    "--convert-to",
+                    "png",
+                    str(pptx_path),
+                    "--outdir",
+                    str(slides_dir),
+                ],
+                check=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            logger.exception("Slide image conversion failed")
+            raise HTTPException(status_code=500, detail="PPTX conversion failed") from exc
+
+        image_files = sorted(
+            slides_dir.glob("*.png"),
+            key=lambda p: int(p.stem.split("-")[-1]),
+        )
+
+        if len(image_files) != len(audio_paths):
+            logger.warning(
+                "Slide count mismatch: %d images vs %d audio files",
+                len(image_files),
+                len(audio_paths),
+            )
+
+        # Prepare ffmpeg inputs and filter graph
+        slide_durations = [d + 2 for d in durations]
+        ffmpeg_inputs: List[str] = []
+        filters: List[str] = []
+        for idx, (img, audio, dur) in enumerate(zip(image_files, audio_paths, slide_durations)):
+            ffmpeg_inputs.extend(["-loop", "1", "-t", str(dur), "-i", str(img), "-i", str(audio)])
+            filters.append(f"[{2*idx}:v]scale=1280:720,format=yuva420p[v{idx}]")
+            filters.append(f"[{2*idx+1}:a]adelay=1000|1000,apad[a{idx}]")
+
+        # Build crossfade chain for video and audio
+        video_chain: List[str] = []
+        audio_chain: List[str] = []
+        cumulative = slide_durations[0]
+        v_prev = "v0"
+        a_prev = "a0"
+        for idx in range(1, len(slide_durations)):
+            offset = cumulative - 2
+            video_chain.append(
+                f"[{v_prev}][v{idx}]xfade=transition=fade:duration=2:offset={offset}[vx{idx}]"
+            )
+            audio_chain.append(
+                f"[{a_prev}][a{idx}]acrossfade=d=2[ax{idx}]"
+            )
+            cumulative = offset + slide_durations[idx]
+            v_prev = f"vx{idx}"
+            a_prev = f"ax{idx}"
+
+        final_v = v_prev
+        final_a = a_prev
+        filter_complex = ";".join(filters + video_chain + audio_chain)
+
+        output_path = tmp_path / f"{Path(pptx_name).stem}.mp4"
+        cmd = [
+            "ffmpeg",
+            "-y",
+            *ffmpeg_inputs,
+            "-filter_complex",
+            filter_complex,
+            "-map",
+            f"[{final_v}]",
+            "-map",
+            f"[{final_a}]",
+            "-movflags",
+            "+faststart",
+            str(output_path),
+        ]
+
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as exc:
+            logger.exception("ffmpeg failed")
+            raise HTTPException(status_code=500, detail="Video generation failed") from exc
+
+        try:
+            with open(output_path, "rb") as video_file:
+                video_bytes = video_file.read()
+            upload_url = upload_file_to_graph(
+                drive_id, folder_id, output_path.name, video_bytes
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.exception("Upload of generated video failed")
+            raise HTTPException(status_code=500, detail="Upload failed") from exc
+
+    return CombineResponse(
+        status="success",
+        video_filename=output_path.name,
+        upload_url=upload_url,
     )
 
 
