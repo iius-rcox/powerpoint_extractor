@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Iterable, Dict, List
+from typing import Iterable, Dict
 
 import requests
 
