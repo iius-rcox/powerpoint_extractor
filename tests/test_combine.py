@@ -92,4 +92,3 @@ def test_combine_missing_binary(mock_download, mock_get_name, mock_list, mock_ru
         json={"drive_id": "d", "folder_id": "f", "pptx_file_id": "p"},
     )
     assert res.status_code == 500
-

@@ -143,8 +143,14 @@ def combine_presentation(request: CombineRequest):
         pptx_bytes = download_file_from_graph(drive_id, pptx_id)
         pptx_name = get_item_name(drive_id, pptx_id)
     except Exception as exc:  # pylint: disable=broad-except
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        if status is not None:
+            logger.error("Failed to download PPTX from Graph: HTTP %s", status)
         logger.exception("Failed to download PPTX from Graph")
-        raise HTTPException(status_code=400, detail="Unable to download PPTX") from exc
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unable to download PPTX: {exc}",
+        ) from exc
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
