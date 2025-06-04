@@ -1,4 +1,5 @@
 import sys
+import subprocess
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -9,9 +10,13 @@ import extractor_api
 client = TestClient(extractor_api.app)
 
 
-def _run_factory(images, raise_ffmpeg=False):
+def _run_factory(images, raise_ffmpeg=False, ffprobe_error=None):
     def _run(cmd, capture_output=False, text=False, check=False):
         if cmd[0] == "ffprobe":
+            if ffprobe_error == "file":
+                raise FileNotFoundError("ffprobe")
+            if ffprobe_error == "process":
+                raise subprocess.CalledProcessError(1, cmd)
             return SimpleNamespace(stdout="1.0")
         if cmd[0] == "libreoffice":
             outdir = cmd[-1]
@@ -92,3 +97,22 @@ def test_combine_missing_binary(mock_download, mock_get_name, mock_list, mock_ru
         json={"drive_id": "d", "folder_id": "f", "pptx_file_id": "p"},
     )
     assert res.status_code == 500
+
+
+@patch("extractor_api.upload_file_to_graph")
+@patch("extractor_api.subprocess.run")
+@patch("extractor_api.list_folder_children")
+@patch("extractor_api.get_item_name")
+@patch("extractor_api.download_file_from_graph")
+def test_combine_ffprobe_error(mock_download, mock_get_name, mock_list, mock_run, mock_upload):
+    mock_download.side_effect = lambda d, i: b"data"
+    mock_get_name.return_value = "slides.pptx"
+    mock_list.return_value = [{"id": "a1", "name": "slide_1.mp3"}]
+    mock_run.side_effect = _run_factory(["Slide-1.png"], ffprobe_error="process")
+
+    res = client.post(
+        "/combine",
+        json={"drive_id": "d", "folder_id": "f", "pptx_file_id": "p"},
+    )
+    assert res.status_code == 500
+    assert res.json()["detail"] == "Audio metadata extraction failed"

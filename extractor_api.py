@@ -194,9 +194,17 @@ def combine_presentation(request: CombineRequest):
                 "default=noprint_wrappers=1:nokey=1",
                 str(audio_path),
             ]
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, check=True
-            )
+            try:
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, check=True
+                )
+            except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+                logger.exception("ffprobe failed")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Audio metadata extraction failed",
+                ) from exc
+
             durations.append(float(result.stdout.strip()))
 
         slides_dir = tmp_path / "slides"
