@@ -116,3 +116,22 @@ def test_combine_ffprobe_error(mock_download, mock_get_name, mock_list, mock_run
     )
     assert res.status_code == 500
     assert res.json()["detail"] == "Audio metadata extraction failed"
+
+
+@patch("extractor_api.upload_file_to_graph")
+@patch("extractor_api.subprocess.run")
+@patch("extractor_api.list_folder_children")
+@patch("extractor_api.get_item_name")
+@patch("extractor_api.download_file_from_graph")
+def test_combine_ffprobe_missing(mock_download, mock_get_name, mock_list, mock_run, mock_upload):
+    mock_download.side_effect = lambda d, i: b"data"
+    mock_get_name.return_value = "slides.pptx"
+    mock_list.return_value = [{"id": "a1", "name": "slide_1.mp3"}]
+    mock_run.side_effect = _run_factory(["Slide-1.png"], ffprobe_error="file")
+
+    res = client.post(
+        "/combine",
+        json={"drive_id": "d", "folder_id": "f", "pptx_file_id": "p"},
+    )
+    assert res.status_code == 500
+    assert res.json()["detail"] == "ffprobe is not installed"
