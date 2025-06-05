@@ -198,7 +198,13 @@ def combine_presentation(request: CombineRequest):
                 result = subprocess.run(
                     cmd, capture_output=True, text=True, check=True
                 )
-            except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+            except FileNotFoundError as exc:
+                logger.exception("ffprobe not found")
+                raise HTTPException(
+                    status_code=500,
+                    detail="ffprobe is not installed",
+                ) from exc
+            except subprocess.CalledProcessError as exc:
                 logger.exception("ffprobe failed")
                 raise HTTPException(
                     status_code=500,
