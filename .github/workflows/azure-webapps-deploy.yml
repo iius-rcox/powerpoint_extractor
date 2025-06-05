@@ -15,7 +15,9 @@ jobs:
       - name: Azure login
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_7D0A6091E0254164BB243737B9704ED8 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_EAA3153A5E934DEF89D807463A5AF861 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_67A793714CC54DD292471449A794D728 }}
 
       - name: Build and push image
         run: |
