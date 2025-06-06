@@ -74,13 +74,31 @@ async def _auth_headers() -> Dict[str, str]:
 
 
 async def download_file_from_graph(drive_id: str, item_id: str) -> bytes:
-    """Return the file content for the given drive and item."""
+    """Return the file content for the given drive and item.
+
+    This function manually follows redirects. Some environments or older
+    versions of ``httpx`` may not respect the ``follow_redirects`` flag,
+    resulting in ``HTTPStatusError`` for 302 responses. To ensure the file is
+    downloaded reliably we iterate through up to 5 redirects ourselves.
+    """
+
     url = f"{GRAPH_BASE_URL}/drives/{drive_id}/items/{item_id}/content"
-    response = await graph_client.get(
-        url, headers=await _auth_headers(), follow_redirects=True
-    )
+    headers = await _auth_headers()
+
+    for _ in range(5):
+        response = await graph_client.get(url, headers=headers)
+        if response.is_redirect:
+            url = response.headers.get("location")
+            if not url:
+                response.raise_for_status()
+            # continue loop with new URL
+            continue
+
+        response.raise_for_status()
+        return response.content
+
+    # Too many redirects
     response.raise_for_status()
-    return response.content
 
 
 async def upload_file_to_graph(
