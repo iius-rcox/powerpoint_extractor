@@ -31,6 +31,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Health check endpoint for Azure App Service
+@app.get("/health")
+def health() -> dict[str, str]:
+    """Simple health check returning application status."""
+    return {"status": "ok"}
+
 logger = logging.getLogger("pptx_extractor")
 logging.basicConfig(
     level=logging.INFO,

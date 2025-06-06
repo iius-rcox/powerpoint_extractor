@@ -42,6 +42,17 @@ For Azure App Service, configure the startup command:
 gunicorn -w 4 -k uvicorn.workers.UvicornWorker extractor_api:app
 ```
 
+### Using the container image
+
+An image is published to GitHub Container Registry as
+`ghcr.io/iius-rcox/pptx-extractor:latest`. To deploy on Azure App Service for
+Containers:
+
+1. Set the container image to `ghcr.io/iius-rcox/pptx-extractor:latest`.
+2. Leave the startup command empty – the container starts Gunicorn automatically.
+3. Set the application setting `WEBSITE_HEALTHCHECK_PATH=/health` so Azure can
+   monitor the API.
+
 ## Example Request
 
 ```bash

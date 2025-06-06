@@ -85,6 +85,12 @@ def test_accepts_pptx_without_extension(mock_get):
     assert data["slide_count"] == 1
 
 
+def test_health_endpoint():
+    res = client.get("/health")
+    assert res.status_code == 200
+    assert res.json() == {"status": "ok"}
+
+
 @patch("extractor_api.TIMEOUT", 5)
 @patch("extractor_api.requests.get")
 @patch("extractor_api.Presentation", FailingPresentation)
