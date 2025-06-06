@@ -1,7 +1,6 @@
-import sys
 import subprocess
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -29,15 +28,18 @@ def _run_factory(images, raise_ffmpeg=False, ffprobe_error=None):
             extractor_api.Path(cmd[-1]).write_bytes(b"video")
             return SimpleNamespace()
         return SimpleNamespace()
+
     return _run
 
 
-@patch("extractor_api.upload_file_to_graph")
+@patch("extractor_api.upload_file_to_graph", new_callable=AsyncMock)
 @patch("extractor_api.subprocess.run")
-@patch("extractor_api.list_folder_children")
-@patch("extractor_api.get_item_name")
-@patch("extractor_api.download_file_from_graph")
-def test_combine_success(mock_download, mock_get_name, mock_list, mock_run, mock_upload):
+@patch("extractor_api.list_folder_children", new_callable=AsyncMock)
+@patch("extractor_api.get_item_name", new_callable=AsyncMock)
+@patch("extractor_api.download_file_from_graph", new_callable=AsyncMock)
+def test_combine_success(
+    mock_download, mock_get_name, mock_list, mock_run, mock_upload
+):
     mock_download.side_effect = lambda d, i: b"data"
     mock_get_name.return_value = "slides.pptx"
     mock_list.return_value = [
@@ -58,9 +60,15 @@ def test_combine_success(mock_download, mock_get_name, mock_list, mock_run, mock
     mock_upload.assert_called_once()
 
 
-@patch("extractor_api.list_folder_children", return_value=[])
-@patch("extractor_api.get_item_name", return_value="slides.pptx")
-@patch("extractor_api.download_file_from_graph", return_value=b"data")
+@patch("extractor_api.list_folder_children", new_callable=AsyncMock, return_value=[])
+@patch(
+    "extractor_api.get_item_name", new_callable=AsyncMock, return_value="slides.pptx"
+)
+@patch(
+    "extractor_api.download_file_from_graph",
+    new_callable=AsyncMock,
+    return_value=b"data",
+)
 def test_combine_no_mp3(mock_download, mock_get_name, mock_list):
     res = client.post(
         "/combine",
@@ -70,8 +78,16 @@ def test_combine_no_mp3(mock_download, mock_get_name, mock_list):
     assert res.json()["detail"] == "No MP3 files found"
 
 
-@patch("extractor_api.get_item_name", side_effect=RuntimeError("fail"))
-@patch("extractor_api.download_file_from_graph", return_value=b"data")
+@patch(
+    "extractor_api.get_item_name",
+    new_callable=AsyncMock,
+    side_effect=RuntimeError("fail"),
+)
+@patch(
+    "extractor_api.download_file_from_graph",
+    new_callable=AsyncMock,
+    return_value=b"data",
+)
 def test_combine_graph_error(mock_download, mock_get_name):
     res = client.post(
         "/combine",
@@ -81,12 +97,14 @@ def test_combine_graph_error(mock_download, mock_get_name):
     assert res.json()["detail"] == "Unable to download PPTX"
 
 
-@patch("extractor_api.upload_file_to_graph")
+@patch("extractor_api.upload_file_to_graph", new_callable=AsyncMock)
 @patch("extractor_api.subprocess.run")
-@patch("extractor_api.list_folder_children")
-@patch("extractor_api.get_item_name")
-@patch("extractor_api.download_file_from_graph")
-def test_combine_missing_binary(mock_download, mock_get_name, mock_list, mock_run, mock_upload):
+@patch("extractor_api.list_folder_children", new_callable=AsyncMock)
+@patch("extractor_api.get_item_name", new_callable=AsyncMock)
+@patch("extractor_api.download_file_from_graph", new_callable=AsyncMock)
+def test_combine_missing_binary(
+    mock_download, mock_get_name, mock_list, mock_run, mock_upload
+):
     mock_download.side_effect = lambda d, i: b"data"
     mock_get_name.return_value = "slides.pptx"
     mock_list.return_value = [{"id": "a1", "name": "slide_1.mp3"}]
@@ -99,12 +117,14 @@ def test_combine_missing_binary(mock_download, mock_get_name, mock_list, mock_ru
     assert res.status_code == 500
 
 
-@patch("extractor_api.upload_file_to_graph")
+@patch("extractor_api.upload_file_to_graph", new_callable=AsyncMock)
 @patch("extractor_api.subprocess.run")
-@patch("extractor_api.list_folder_children")
-@patch("extractor_api.get_item_name")
-@patch("extractor_api.download_file_from_graph")
-def test_combine_ffprobe_error(mock_download, mock_get_name, mock_list, mock_run, mock_upload):
+@patch("extractor_api.list_folder_children", new_callable=AsyncMock)
+@patch("extractor_api.get_item_name", new_callable=AsyncMock)
+@patch("extractor_api.download_file_from_graph", new_callable=AsyncMock)
+def test_combine_ffprobe_error(
+    mock_download, mock_get_name, mock_list, mock_run, mock_upload
+):
     mock_download.side_effect = lambda d, i: b"data"
     mock_get_name.return_value = "slides.pptx"
     mock_list.return_value = [{"id": "a1", "name": "slide_1.mp3"}]
@@ -118,12 +138,14 @@ def test_combine_ffprobe_error(mock_download, mock_get_name, mock_list, mock_run
     assert res.json()["detail"] == "Audio metadata extraction failed"
 
 
-@patch("extractor_api.upload_file_to_graph")
+@patch("extractor_api.upload_file_to_graph", new_callable=AsyncMock)
 @patch("extractor_api.subprocess.run")
-@patch("extractor_api.list_folder_children")
-@patch("extractor_api.get_item_name")
-@patch("extractor_api.download_file_from_graph")
-def test_combine_ffprobe_missing(mock_download, mock_get_name, mock_list, mock_run, mock_upload):
+@patch("extractor_api.list_folder_children", new_callable=AsyncMock)
+@patch("extractor_api.get_item_name", new_callable=AsyncMock)
+@patch("extractor_api.download_file_from_graph", new_callable=AsyncMock)
+def test_combine_ffprobe_missing(
+    mock_download, mock_get_name, mock_list, mock_run, mock_upload
+):
     mock_download.side_effect = lambda d, i: b"data"
     mock_get_name.return_value = "slides.pptx"
     mock_list.return_value = [{"id": "a1", "name": "slide_1.mp3"}]
