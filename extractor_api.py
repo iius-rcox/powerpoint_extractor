@@ -19,6 +19,8 @@ from graph_utils import (
     upload_file_to_graph,
     list_folder_children,
     get_item_name,
+    startup_graph_client,
+    close_graph_client,
 )
 
 
@@ -51,8 +53,24 @@ logging.basicConfig(
 # Defaults to 60 seconds if not provided.
 TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "60"))
 
-# Reusable HTTP client for outbound requests
-http_client = httpx.AsyncClient()
+# Reusable HTTP client for outbound requests - created at startup
+http_client: httpx.AsyncClient | None = None
+
+
+@app.on_event("startup")
+async def startup_event() -> None:
+    """Create shared HTTP clients."""
+    global http_client
+    http_client = httpx.AsyncClient()
+    await startup_graph_client()
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    """Close shared HTTP clients."""
+    if http_client is not None:
+        await http_client.aclose()
+    await close_graph_client()
 
 # External tool locations can be overridden via environment variables
 FFPROBE_BIN = os.environ.get("FFPROBE_BIN", "ffprobe")
