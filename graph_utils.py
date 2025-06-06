@@ -11,7 +11,20 @@ import httpx
 GRAPH_BASE_URL = os.environ.get("GRAPH_BASE_URL", "https://graph.microsoft.com/v1.0")
 
 # Shared HTTP client for Graph requests
-graph_client = httpx.AsyncClient()
+graph_client: Optional[httpx.AsyncClient] = None
+
+
+async def startup_graph_client() -> None:
+    """Create the HTTP client used for Graph requests."""
+    global graph_client
+    graph_client = httpx.AsyncClient()
+
+
+async def close_graph_client() -> None:
+    """Close the Graph HTTP client if it exists."""
+    global graph_client
+    if graph_client is not None:
+        await graph_client.aclose()
 
 _cached_token: Optional[str] = None
 _token_expiry: float = 0.0
