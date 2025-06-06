@@ -175,7 +175,7 @@ def build_crossfade_filter(durations: List[float]):
 
 @app.post("/extract", response_model=ExtractResponse)
 async def extract_notes(request: ExtractRequest):
-    url = request.file_url
+    url = str(request.file_url)
     logger.info("Extraction requested for %s", url)
 
     try:
