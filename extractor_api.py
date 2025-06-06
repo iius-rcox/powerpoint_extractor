@@ -5,8 +5,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 from typing import List, Optional
+from itertools import accumulate
+import asyncio
 
-import requests
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl
@@ -31,11 +33,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Health check endpoint for Azure App Service
 @app.get("/health")
 def health() -> dict[str, str]:
     """Simple health check returning application status."""
     return {"status": "ok"}
+
 
 logger = logging.getLogger("pptx_extractor")
 logging.basicConfig(
@@ -46,6 +50,15 @@ logging.basicConfig(
 # Allow the request timeout to be configured via an environment variable.
 # Defaults to 60 seconds if not provided.
 TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "60"))
+
+# Reusable HTTP client for outbound requests
+http_client = httpx.AsyncClient()
+
+# External tool locations can be overridden via environment variables
+FFPROBE_BIN = os.environ.get("FFPROBE_BIN", "ffprobe")
+FFMPEG_BIN = os.environ.get("FFMPEG_BIN", "ffmpeg")
+LIBREOFFICE_BIN = os.environ.get("LIBREOFFICE_BIN", "libreoffice")
+
 
 class ExtractRequest(BaseModel):
     file_url: HttpUrl
@@ -76,22 +89,94 @@ class CombineResponse(BaseModel):
     upload_url: str
 
 
+def _extract_slides(presentation: Presentation) -> List[SlideData]:
+    """Return slide metadata from a Presentation."""
+    slides = []
+    for idx, slide in enumerate(presentation.slides, start=1):
+        title = slide.shapes.title.text if slide.shapes.title else None
+        notes = (
+            slide.notes_slide.notes_text_frame.text
+            if slide.has_notes_slide and slide.notes_slide.notes_text_frame
+            else None
+        )
+        slides.append(SlideData(slide_number=idx, title_text=title, notes_text=notes))
+    return slides
+
+
+def get_audio_duration(path: Path) -> float:
+    """Return audio duration in seconds using ffprobe."""
+    cmd = [
+        FFPROBE_BIN,
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(path),
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except FileNotFoundError as exc:
+        logger.exception("ffprobe not found")
+        raise HTTPException(status_code=500, detail="ffprobe is not installed") from exc
+    except subprocess.CalledProcessError as exc:
+        logger.exception("ffprobe failed")
+        raise HTTPException(
+            status_code=500,
+            detail="Audio metadata extraction failed",
+        ) from exc
+    return float(result.stdout.strip())
+
+
+def build_ffmpeg_inputs(images: List[Path], audios: List[Path], durations: List[float]):
+    inputs: List[str] = []
+    filters: List[str] = []
+    for idx, (img, audio, dur) in enumerate(zip(images, audios, durations)):
+        inputs.extend(["-loop", "1", "-t", str(dur), "-i", str(img), "-i", str(audio)])
+        filters.append(f"[{2*idx}:v]scale=1280:720,format=yuva420p[v{idx}]")
+        filters.append(f"[{2*idx+1}:a]adelay=1000|1000,apad[a{idx}]")
+    return inputs, filters
+
+
+def build_crossfade_filter(durations: List[float]):
+    video_chain: List[str] = []
+    audio_chain: List[str] = []
+    offsets = [c - 2 for c in accumulate(durations)][:-1]
+    v_prev = "v0"
+    a_prev = "a0"
+    for idx, offset in enumerate(offsets, start=1):
+        video_chain.append(
+            f"[{v_prev}][v{idx}]xfade=transition=fade:duration=2:offset={offset}[vx{idx}]"
+        )
+        audio_chain.append(f"[{a_prev}][a{idx}]acrossfade=d=2[ax{idx}]")
+        v_prev = f"vx{idx}"
+        a_prev = f"ax{idx}"
+    return video_chain, audio_chain, v_prev, a_prev
+
+
 @app.post("/extract", response_model=ExtractResponse)
-def extract_notes(request: ExtractRequest):
+async def extract_notes(request: ExtractRequest):
     url = request.file_url
     logger.info("Extraction requested for %s", url)
 
     try:
-        response = requests.get(url, timeout=TIMEOUT)
+        response = await http_client.get(url, timeout=TIMEOUT)
         response.raise_for_status()
         logger.debug("Downloaded %d bytes", len(response.content))
-    except requests.RequestException as exc:
+    except httpx.RequestError as exc:
         logger.exception("Failed to download file from %s", url)
-        raise HTTPException(status_code=400, detail=f"Unable to download file: {exc}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Unable to download file: {exc}"
+        ) from exc
 
     content_type = response.headers.get("Content-Type", "")
     logger.debug("Content-Type received: %s", content_type)
-    if content_type and "presentation" not in content_type and "ppt" not in content_type:
+    if (
+        content_type
+        and "presentation" not in content_type
+        and "ppt" not in content_type
+    ):
         logger.warning("Unsupported content type: %s", content_type)
         raise HTTPException(status_code=422, detail="Only .pptx files are supported")
 
@@ -102,23 +187,7 @@ def extract_notes(request: ExtractRequest):
         logger.exception("Failed to parse PowerPoint file")
         raise HTTPException(status_code=422, detail="Invalid .pptx file") from exc
 
-    slides_data: List[SlideData] = []
-    for idx, slide in enumerate(presentation.slides, start=1):
-        title = None
-        if slide.shapes.title is not None:
-            title = slide.shapes.title.text
-
-        notes_text = None
-        if slide.has_notes_slide and slide.notes_slide.notes_text_frame:
-            notes_text = slide.notes_slide.notes_text_frame.text
-
-        slides_data.append(
-            SlideData(
-                slide_number=idx,
-                title_text=title,
-                notes_text=notes_text,
-            )
-        )
+    slides_data = _extract_slides(presentation)
 
     logger.info("Successfully extracted %d slides", len(slides_data))
 
@@ -131,7 +200,7 @@ def extract_notes(request: ExtractRequest):
 
 
 @app.post("/combine", response_model=CombineResponse)
-def combine_presentation(request: CombineRequest):
+async def combine_presentation(request: CombineRequest):
     """Combine a PPTX presentation with per-slide audio into a video."""
     logger.info(
         "Combining PPTX %s in drive %s with audio from folder %s",
@@ -145,8 +214,8 @@ def combine_presentation(request: CombineRequest):
     pptx_id = request.pptx_file_id
 
     try:
-        pptx_bytes = download_file_from_graph(drive_id, pptx_id)
-        pptx_name = get_item_name(drive_id, pptx_id)
+        pptx_bytes = await download_file_from_graph(drive_id, pptx_id)
+        pptx_name = await get_item_name(drive_id, pptx_id)
     except Exception as exc:  # pylint: disable=broad-except
         status = getattr(getattr(exc, "response", None), "status_code", None)
         if status is not None:
@@ -160,15 +229,16 @@ def combine_presentation(request: CombineRequest):
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
         pptx_path = tmp_path / "presentation.pptx"
-        with open(pptx_path, "wb") as pptx_file:
-            pptx_file.write(pptx_bytes)
+        pptx_path.write_bytes(pptx_bytes)
 
         # Retrieve MP3 metadata from the folder
         try:
-            children = list_folder_children(drive_id, folder_id)
+            children = await list_folder_children(drive_id, folder_id)
         except Exception as exc:  # pylint: disable=broad-except
             logger.exception("Failed to list folder contents")
-            raise HTTPException(status_code=400, detail="Unable to list folder") from exc
+            raise HTTPException(
+                status_code=400, detail="Unable to list folder"
+            ) from exc
 
         audio_items = [
             item for item in children if item.get("name", "").lower().endswith(".mp3")
@@ -177,54 +247,29 @@ def combine_presentation(request: CombineRequest):
             raise HTTPException(status_code=400, detail="No MP3 files found")
 
         # Sort by slide number based on filename pattern slide_<n>.mp3
-        audio_items.sort(
-            key=lambda x: int(Path(x["name"]).stem.split("_")[-1])
-        )
+        audio_items.sort(key=lambda x: int(Path(x["name"]).stem.split("_")[-1]))
 
         audio_paths: List[Path] = []
         durations: List[float] = []
-        for item in audio_items:
-            audio_bytes = download_file_from_graph(drive_id, item["id"])
+
+        async def fetch_audio(item: dict) -> tuple[Path, float]:
+            audio_bytes = await download_file_from_graph(drive_id, item["id"])
             audio_path = tmp_path / item["name"]
-            with open(audio_path, "wb") as audio_file:
-                audio_file.write(audio_bytes)
-            audio_paths.append(audio_path)
+            audio_path.write_bytes(audio_bytes)
+            duration = await asyncio.to_thread(get_audio_duration, audio_path)
+            return audio_path, duration
 
-            cmd = [
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                str(audio_path),
-            ]
-            try:
-                result = subprocess.run(
-                    cmd, capture_output=True, text=True, check=True
-                )
-            except FileNotFoundError as exc:
-                logger.exception("ffprobe not found")
-                raise HTTPException(
-                    status_code=500,
-                    detail="ffprobe is not installed",
-                ) from exc
-            except subprocess.CalledProcessError as exc:
-                logger.exception("ffprobe failed")
-                raise HTTPException(
-                    status_code=500,
-                    detail="Audio metadata extraction failed",
-                ) from exc
-
-            durations.append(float(result.stdout.strip()))
+        results = await asyncio.gather(*(fetch_audio(it) for it in audio_items))
+        for path, dur in results:
+            audio_paths.append(path)
+            durations.append(dur)
 
         slides_dir = tmp_path / "slides"
         slides_dir.mkdir(exist_ok=True)
         try:
             subprocess.run(
                 [
-                    "libreoffice",
+                    LIBREOFFICE_BIN,
                     "--headless",
                     "--convert-to",
                     "png",
@@ -236,7 +281,9 @@ def combine_presentation(request: CombineRequest):
             )
         except subprocess.CalledProcessError as exc:
             logger.exception("Slide image conversion failed")
-            raise HTTPException(status_code=500, detail="PPTX conversion failed") from exc
+            raise HTTPException(
+                status_code=500, detail="PPTX conversion failed"
+            ) from exc
 
         image_files = sorted(
             slides_dir.glob("*.png"),
@@ -252,38 +299,17 @@ def combine_presentation(request: CombineRequest):
 
         # Prepare ffmpeg inputs and filter graph
         slide_durations = [d + 2 for d in durations]
-        ffmpeg_inputs: List[str] = []
-        filters: List[str] = []
-        for idx, (img, audio, dur) in enumerate(zip(image_files, audio_paths, slide_durations)):
-            ffmpeg_inputs.extend(["-loop", "1", "-t", str(dur), "-i", str(img), "-i", str(audio)])
-            filters.append(f"[{2*idx}:v]scale=1280:720,format=yuva420p[v{idx}]")
-            filters.append(f"[{2*idx+1}:a]adelay=1000|1000,apad[a{idx}]")
-
-        # Build crossfade chain for video and audio
-        video_chain: List[str] = []
-        audio_chain: List[str] = []
-        cumulative = slide_durations[0]
-        v_prev = "v0"
-        a_prev = "a0"
-        for idx in range(1, len(slide_durations)):
-            offset = cumulative - 2
-            video_chain.append(
-                f"[{v_prev}][v{idx}]xfade=transition=fade:duration=2:offset={offset}[vx{idx}]"
-            )
-            audio_chain.append(
-                f"[{a_prev}][a{idx}]acrossfade=d=2[ax{idx}]"
-            )
-            cumulative = offset + slide_durations[idx]
-            v_prev = f"vx{idx}"
-            a_prev = f"ax{idx}"
-
-        final_v = v_prev
-        final_a = a_prev
+        ffmpeg_inputs, filters = build_ffmpeg_inputs(
+            image_files, audio_paths, slide_durations
+        )
+        video_chain, audio_chain, final_v, final_a = build_crossfade_filter(
+            slide_durations
+        )
         filter_complex = ";".join(filters + video_chain + audio_chain)
 
         output_path = tmp_path / f"{Path(pptx_name).stem}.mp4"
         cmd = [
-            "ffmpeg",
+            FFMPEG_BIN,
             "-y",
             *ffmpeg_inputs,
             "-filter_complex",
@@ -301,12 +327,13 @@ def combine_presentation(request: CombineRequest):
             subprocess.run(cmd, check=True)
         except subprocess.CalledProcessError as exc:
             logger.exception("ffmpeg failed")
-            raise HTTPException(status_code=500, detail="Video generation failed") from exc
+            raise HTTPException(
+                status_code=500, detail="Video generation failed"
+            ) from exc
 
         try:
-            with open(output_path, "rb") as video_file:
-                video_bytes = video_file.read()
-            upload_url = upload_file_to_graph(
+            video_bytes = output_path.read_bytes()
+            upload_url = await upload_file_to_graph(
                 drive_id, folder_id, output_path.name, video_bytes
             )
         except Exception as exc:  # pylint: disable=broad-except
