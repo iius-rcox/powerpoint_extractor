@@ -161,10 +161,10 @@ async def extract_notes(request: ExtractRequest):
     logger.info("Extraction requested for %s", url)
 
     try:
-        response = await http_client.get(url, timeout=TIMEOUT)
+        response = await http_client.get(url, timeout=TIMEOUT, follow_redirects=True)
         response.raise_for_status()
         logger.debug("Downloaded %d bytes", len(response.content))
-    except httpx.RequestError as exc:
+    except (httpx.RequestError, httpx.HTTPStatusError) as exc:
         logger.exception("Failed to download file from %s", url)
         raise HTTPException(
             status_code=400, detail=f"Unable to download file: {exc}"

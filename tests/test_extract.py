@@ -48,7 +48,9 @@ def test_accepts_pptx_without_extension(mock_presentation, mock_get):
         json={"file_url": "https://example.com/file", "file_name": "file.pptx"},
     )
     assert res.status_code == 200
-    mock_get.assert_awaited_once_with("https://example.com/file", timeout=5)
+    mock_get.assert_awaited_once_with(
+        "https://example.com/file", timeout=5, follow_redirects=True
+    )
     data = res.json()
     assert data["filename"] == "file.pptx"
     assert "file_content" not in data
@@ -73,4 +75,28 @@ def test_invalid_pptx_returns_422(mock_presentation, mock_get):
     )
     assert res.status_code == 422
     assert res.json()["detail"] == "Only .pptx files are supported"
-    mock_get.assert_awaited_once_with("https://example.com/file", timeout=5)
+    mock_get.assert_awaited_once_with(
+        "https://example.com/file", timeout=5, follow_redirects=True
+    )
+
+@patch("extractor_api.TIMEOUT", 5)
+@patch("extractor_api.http_client.get", new_callable=AsyncMock)
+def test_download_http_error(mock_get):
+    request = httpx.Request("GET", "https://example.com/file")
+    response = _mock_response(status_code=404)
+    mock_get.side_effect = httpx.HTTPStatusError("not found", request=request, response=response)
+    res = client.post("/extract", json={"file_url": "https://example.com/file", "file_name": "file.pptx"})
+    assert res.status_code == 400
+    assert "Unable to download file" in res.json()["detail"]
+    mock_get.assert_awaited_once_with("https://example.com/file", timeout=5, follow_redirects=True)
+
+
+@patch("extractor_api.TIMEOUT", 5)
+@patch("extractor_api.http_client.get", new_callable=AsyncMock)
+def test_download_request_error(mock_get):
+    mock_get.side_effect = httpx.RequestError("boom", request=httpx.Request("GET", "https://example.com/file"))
+    res = client.post("/extract", json={"file_url": "https://example.com/file", "file_name": "file.pptx"})
+    assert res.status_code == 400
+    assert "Unable to download file" in res.json()["detail"]
+    mock_get.assert_awaited_once_with("https://example.com/file", timeout=5, follow_redirects=True)
+
