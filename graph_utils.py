@@ -76,7 +76,9 @@ async def _auth_headers() -> Dict[str, str]:
 async def download_file_from_graph(drive_id: str, item_id: str) -> bytes:
     """Return the file content for the given drive and item."""
     url = f"{GRAPH_BASE_URL}/drives/{drive_id}/items/{item_id}/content"
-    response = await graph_client.get(url, headers=await _auth_headers())
+    response = await graph_client.get(
+        url, headers=await _auth_headers(), follow_redirects=True
+    )
     response.raise_for_status()
     return response.content
 
