@@ -279,6 +279,12 @@ async def combine_presentation(request: CombineRequest):
                 ],
                 check=True,
             )
+        except FileNotFoundError as exc:
+            logger.exception("libreoffice not found")
+            raise HTTPException(
+                status_code=500,
+                detail="libreoffice is not installed",
+            ) from exc
         except subprocess.CalledProcessError as exc:
             logger.exception("Slide image conversion failed")
             raise HTTPException(

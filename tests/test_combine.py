@@ -181,4 +181,4 @@ def test_combine_libreoffice_missing(
         json={"drive_id": "d", "folder_id": "f", "pptx_file_id": "p"},
     )
     assert res.status_code == 500
-    assert res.json()["detail"] == "PPTX conversion failed"
+    assert res.json()["detail"] == "libreoffice is not installed"
