@@ -15,9 +15,16 @@ graph_client: Optional[httpx.AsyncClient] = None
 
 
 async def startup_graph_client() -> None:
-    """Create the HTTP client used for Graph requests."""
+    """Create the HTTP client used for Graph requests.
+
+    The default connection pool limit of ``httpx.AsyncClient`` is ``100``. When
+    downloading many audio files concurrently this limit can be exceeded which
+    results in ``PoolTimeout`` errors. To avoid this we create the client with
+    an unlimited connection pool.
+    """
     global graph_client
-    graph_client = httpx.AsyncClient()
+    limits = httpx.Limits(max_keepalive_connections=None, max_connections=None)
+    graph_client = httpx.AsyncClient(limits=limits)
 
 
 async def close_graph_client() -> None:
