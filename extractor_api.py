@@ -56,6 +56,16 @@ TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "60"))
 CONNECT_TIMEOUT = float(os.environ.get("CONNECT_TIMEOUT", "10"))
 DOWNLOAD_CONCURRENCY = int(os.environ.get("DOWNLOAD_CONCURRENCY", "5"))
 
+# httpx requires all timeout parameters be specified when using custom values.
+# Create a reusable configuration object shared by the client and per-request
+# calls so that connection and read timeouts are explicit.
+HTTPX_TIMEOUT = httpx.Timeout(
+    connect=CONNECT_TIMEOUT,
+    read=TIMEOUT,
+    write=TIMEOUT,
+    pool=CONNECT_TIMEOUT,
+)
+
 # Reusable HTTP client for outbound requests - created at startup
 http_client: httpx.AsyncClient | None = None
 
@@ -64,9 +74,8 @@ http_client: httpx.AsyncClient | None = None
 async def startup_event() -> None:
     """Create shared HTTP clients."""
     global http_client
-    client_timeout = httpx.Timeout(connect=CONNECT_TIMEOUT, read=TIMEOUT)
     limits = httpx.Limits(max_connections=100)
-    http_client = httpx.AsyncClient(timeout=client_timeout, limits=limits)
+    http_client = httpx.AsyncClient(timeout=HTTPX_TIMEOUT, limits=limits)
     await startup_graph_client()
 
 
@@ -200,7 +209,9 @@ async def extract_notes(request: ExtractRequest):
     logger.info("Extraction requested for %s", url)
 
     try:
-        response = await http_client.get(url, timeout=TIMEOUT, follow_redirects=True)
+        response = await http_client.get(
+            url, timeout=HTTPX_TIMEOUT, follow_redirects=True
+        )
         response.raise_for_status()
         logger.debug("Downloaded %d bytes", len(response.content))
     except (httpx.RequestError, httpx.HTTPStatusError) as exc:
