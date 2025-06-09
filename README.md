@@ -59,6 +59,7 @@ Containers:
 2. Leave the startup command empty – the container starts Gunicorn automatically using `gunicorn.conf.py`.
 3. Set the application setting `WEBSITE_HEALTHCHECK_PATH=/health` so Azure can
    monitor the API.
+4. The container listens on port **80**; ensure any App Service settings or networking rules allow traffic on this port.
 
 ## Example Request
 

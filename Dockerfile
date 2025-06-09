@@ -21,5 +21,8 @@ RUN adduser --disabled-password --gecos "" appuser && chown -R appuser /app
 # Switch to non-root user
 USER appuser
 
+# Expose the HTTP port used by the application
+EXPOSE 80
+
 # Default command
-CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-c", "gunicorn.conf.py", "extractor_api:app"]
+CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:80", "-c", "gunicorn.conf.py", "extractor_api:app"]
