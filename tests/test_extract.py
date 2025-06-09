@@ -35,10 +35,7 @@ class FailingPresentation:
         raise ValueError("bad file")
 
 
-@patch(
-    "extractor_api.HTTPX_TIMEOUT",
-    httpx.Timeout(connect=10, read=5, write=5, pool=10),
-)
+@patch("extractor_api.HTTPX_TIMEOUT", httpx.Timeout(5))
 @patch("extractor_api.TIMEOUT", 5)
 @patch("extractor_api.http_client.get", new_callable=AsyncMock)
 @patch("extractor_api.Presentation", DummyPresentation)
@@ -69,10 +66,7 @@ def test_health_endpoint():
     assert res.json() == {"status": "ok"}
 
 
-@patch(
-    "extractor_api.HTTPX_TIMEOUT",
-    httpx.Timeout(connect=10, read=5, write=5, pool=10),
-)
+@patch("extractor_api.HTTPX_TIMEOUT", httpx.Timeout(5))
 @patch("extractor_api.TIMEOUT", 5)
 @patch("extractor_api.http_client.get", new_callable=AsyncMock)
 @patch("extractor_api.Presentation", FailingPresentation)
@@ -91,10 +85,7 @@ def test_invalid_pptx_returns_422(mock_presentation, mock_get):
         follow_redirects=True,
     )
 
-@patch(
-    "extractor_api.HTTPX_TIMEOUT",
-    httpx.Timeout(connect=10, read=5, write=5, pool=10),
-)
+@patch("extractor_api.HTTPX_TIMEOUT", httpx.Timeout(5))
 @patch("extractor_api.TIMEOUT", 5)
 @patch("extractor_api.http_client.get", new_callable=AsyncMock)
 def test_download_http_error(mock_get):
@@ -111,10 +102,7 @@ def test_download_http_error(mock_get):
     )
 
 
-@patch(
-    "extractor_api.HTTPX_TIMEOUT",
-    httpx.Timeout(connect=10, read=5, write=5, pool=10),
-)
+@patch("extractor_api.HTTPX_TIMEOUT", httpx.Timeout(5))
 @patch("extractor_api.TIMEOUT", 5)
 @patch("extractor_api.http_client.get", new_callable=AsyncMock)
 def test_download_request_error(mock_get):

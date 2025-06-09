@@ -59,12 +59,8 @@ DOWNLOAD_CONCURRENCY = int(os.environ.get("DOWNLOAD_CONCURRENCY", "5"))
 # httpx requires all timeout parameters be specified when using custom values.
 # Create a reusable configuration object shared by the client and per-request
 # calls so that connection and read timeouts are explicit.
-HTTPX_TIMEOUT = httpx.Timeout(
-    connect=CONNECT_TIMEOUT,
-    read=TIMEOUT,
-    write=TIMEOUT,
-    pool=CONNECT_TIMEOUT,
-)
+# Use a single timeout value for all operations to avoid misconfiguration
+HTTPX_TIMEOUT = httpx.Timeout(TIMEOUT)
 
 # Reusable HTTP client for outbound requests - created at startup
 http_client: httpx.AsyncClient | None = None
