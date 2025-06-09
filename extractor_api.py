@@ -359,6 +359,12 @@ async def combine_presentation(request: CombineRequest):
 
         try:
             subprocess.run(cmd, check=True)
+        except FileNotFoundError as exc:
+            logger.exception("ffmpeg not found")
+            raise HTTPException(
+                status_code=500,
+                detail="ffmpeg is not installed",
+            ) from exc
         except subprocess.CalledProcessError as exc:
             logger.exception("ffmpeg failed")
             raise HTTPException(
