@@ -10,7 +10,7 @@ client = TestClient(extractor_api.app)
 
 
 def _run_factory(images, raise_ffmpeg=False, ffprobe_error=None, raise_libreoffice=False):
-    def _run(cmd, capture_output=False, text=False, check=False):
+    async def _run(cmd):
         if cmd[0] == "ffprobe":
             if ffprobe_error == "file":
                 raise FileNotFoundError("ffprobe")
@@ -35,7 +35,7 @@ def _run_factory(images, raise_ffmpeg=False, ffprobe_error=None, raise_libreoffi
 
 
 @patch("extractor_api.upload_file_to_graph", new_callable=AsyncMock)
-@patch("extractor_api.subprocess.run")
+@patch("extractor_api.run_cmd", new_callable=AsyncMock)
 @patch("extractor_api.list_folder_children", new_callable=AsyncMock)
 @patch("extractor_api.get_item_name", new_callable=AsyncMock)
 @patch("extractor_api.download_file_from_graph", new_callable=AsyncMock)
@@ -63,7 +63,7 @@ def test_combine_success(
 
 
 @patch("extractor_api.upload_file_to_graph", new_callable=AsyncMock)
-@patch("extractor_api.subprocess.run")
+@patch("extractor_api.run_cmd", new_callable=AsyncMock)
 @patch("extractor_api.list_folder_children", new_callable=AsyncMock)
 @patch("extractor_api.get_item_name", new_callable=AsyncMock)
 @patch("extractor_api.download_file_from_graph", new_callable=AsyncMock)
@@ -127,7 +127,7 @@ def test_combine_graph_error(mock_download, mock_get_name):
 
 
 @patch("extractor_api.upload_file_to_graph", new_callable=AsyncMock)
-@patch("extractor_api.subprocess.run")
+@patch("extractor_api.run_cmd", new_callable=AsyncMock)
 @patch("extractor_api.list_folder_children", new_callable=AsyncMock)
 @patch("extractor_api.get_item_name", new_callable=AsyncMock)
 @patch("extractor_api.download_file_from_graph", new_callable=AsyncMock)
@@ -148,7 +148,7 @@ def test_combine_missing_binary(
 
 
 @patch("extractor_api.upload_file_to_graph", new_callable=AsyncMock)
-@patch("extractor_api.subprocess.run")
+@patch("extractor_api.run_cmd", new_callable=AsyncMock)
 @patch("extractor_api.list_folder_children", new_callable=AsyncMock)
 @patch("extractor_api.get_item_name", new_callable=AsyncMock)
 @patch("extractor_api.download_file_from_graph", new_callable=AsyncMock)
@@ -169,7 +169,7 @@ def test_combine_ffprobe_error(
 
 
 @patch("extractor_api.upload_file_to_graph", new_callable=AsyncMock)
-@patch("extractor_api.subprocess.run")
+@patch("extractor_api.run_cmd", new_callable=AsyncMock)
 @patch("extractor_api.list_folder_children", new_callable=AsyncMock)
 @patch("extractor_api.get_item_name", new_callable=AsyncMock)
 @patch("extractor_api.download_file_from_graph", new_callable=AsyncMock)
@@ -190,7 +190,7 @@ def test_combine_ffprobe_missing(
 
 
 @patch("extractor_api.upload_file_to_graph", new_callable=AsyncMock)
-@patch("extractor_api.subprocess.run")
+@patch("extractor_api.run_cmd", new_callable=AsyncMock)
 @patch("extractor_api.list_folder_children", new_callable=AsyncMock)
 @patch("extractor_api.get_item_name", new_callable=AsyncMock)
 @patch("extractor_api.download_file_from_graph", new_callable=AsyncMock)

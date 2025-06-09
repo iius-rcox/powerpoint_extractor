@@ -53,6 +53,8 @@ logging.basicConfig(
 # Allow the request timeout to be configured via an environment variable.
 # Defaults to 60 seconds if not provided.
 TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "60"))
+CONNECT_TIMEOUT = float(os.environ.get("CONNECT_TIMEOUT", "10"))
+DOWNLOAD_CONCURRENCY = int(os.environ.get("DOWNLOAD_CONCURRENCY", "5"))
 
 # Reusable HTTP client for outbound requests - created at startup
 http_client: httpx.AsyncClient | None = None
@@ -62,7 +64,9 @@ http_client: httpx.AsyncClient | None = None
 async def startup_event() -> None:
     """Create shared HTTP clients."""
     global http_client
-    http_client = httpx.AsyncClient()
+    client_timeout = httpx.Timeout(connect=CONNECT_TIMEOUT, read=TIMEOUT)
+    limits = httpx.Limits(max_connections=100)
+    http_client = httpx.AsyncClient(timeout=client_timeout, limits=limits)
     await startup_graph_client()
 
 
@@ -155,6 +159,13 @@ def get_audio_duration(path: Path) -> float:
             detail="Audio metadata extraction failed",
         ) from exc
     return float(result.stdout.strip())
+
+
+async def run_cmd(cmd: List[str]) -> None:
+    """Run an external command asynchronously and raise on failure."""
+    proc = await asyncio.create_subprocess_exec(*cmd)
+    if await proc.wait() != 0:
+        raise subprocess.CalledProcessError(proc.returncode, cmd)
 
 
 def build_ffmpeg_inputs(images: List[Path], audios: List[Path], durations: List[float]):
@@ -280,12 +291,17 @@ async def combine_presentation(request: CombineRequest):
         audio_paths: List[Path] = []
         durations: List[float] = []
 
+        semaphore = asyncio.Semaphore(DOWNLOAD_CONCURRENCY)
+
         async def fetch_audio(item: dict) -> tuple[Path, float]:
-            audio_bytes = await download_file_from_graph(drive_id, item["id"])
-            audio_path = tmp_path / item["name"]
-            audio_path.write_bytes(audio_bytes)
-            duration = await asyncio.to_thread(get_audio_duration, audio_path)
-            return audio_path, duration
+            async with semaphore:
+                audio_bytes = await asyncio.wait_for(
+                    download_file_from_graph(drive_id, item["id"]), timeout=TIMEOUT
+                )
+                audio_path = tmp_path / item["name"]
+                audio_path.write_bytes(audio_bytes)
+                duration = await asyncio.to_thread(get_audio_duration, audio_path)
+                return audio_path, duration
 
         results = await asyncio.gather(*(fetch_audio(it) for it in audio_items))
         for path, dur in results:
@@ -295,7 +311,7 @@ async def combine_presentation(request: CombineRequest):
         slides_dir = tmp_path / "slides"
         slides_dir.mkdir(exist_ok=True)
         try:
-            subprocess.run(
+            await run_cmd(
                 [
                     LIBREOFFICE_BIN,
                     "--headless",
@@ -304,8 +320,7 @@ async def combine_presentation(request: CombineRequest):
                     str(pptx_path),
                     "--outdir",
                     str(slides_dir),
-                ],
-                check=True,
+                ]
             )
         except FileNotFoundError as exc:
             logger.exception("libreoffice not found")
@@ -358,7 +373,7 @@ async def combine_presentation(request: CombineRequest):
         ]
 
         try:
-            subprocess.run(cmd, check=True)
+            await run_cmd(cmd)
         except FileNotFoundError as exc:
             logger.exception("ffmpeg not found")
             raise HTTPException(
