@@ -144,6 +144,7 @@ def test_combine_missing_binary(
         json={"drive_id": "d", "folder_id": "f", "pptx_file_id": "p"},
     )
     assert res.status_code == 500
+    assert res.json()["detail"] == "ffmpeg is not installed"
 
 
 @patch("extractor_api.upload_file_to_graph", new_callable=AsyncMock)
