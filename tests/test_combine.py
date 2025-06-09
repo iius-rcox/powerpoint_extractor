@@ -62,6 +62,33 @@ def test_combine_success(
     mock_upload.assert_called_once()
 
 
+@patch("extractor_api.upload_file_to_graph", new_callable=AsyncMock)
+@patch("extractor_api.subprocess.run")
+@patch("extractor_api.list_folder_children", new_callable=AsyncMock)
+@patch("extractor_api.get_item_name", new_callable=AsyncMock)
+@patch("extractor_api.download_file_from_graph", new_callable=AsyncMock)
+def test_combine_slide_names_without_dash(
+    mock_download, mock_get_name, mock_list, mock_run, mock_upload
+):
+    mock_download.side_effect = lambda d, i: b"data"
+    mock_get_name.return_value = "slides.pptx"
+    mock_list.return_value = [
+        {"id": "a1", "name": "slide_1.mp3"},
+        {"id": "a2", "name": "slide_2.mp3"},
+    ]
+    mock_run.side_effect = _run_factory(["Slide1.png", "Slide2.png"])
+    mock_upload.return_value = "http://example.com/video.mp4"
+
+    res = client.post(
+        "/combine",
+        json={"drive_id": "d", "folder_id": "f", "pptx_file_id": "p"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "success"
+    mock_upload.assert_called_once()
+
+
 @patch("extractor_api.list_folder_children", new_callable=AsyncMock, return_value=[])
 @patch(
     "extractor_api.get_item_name", new_callable=AsyncMock, return_value="slides.pptx"
