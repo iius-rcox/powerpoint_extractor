@@ -172,9 +172,16 @@ def get_audio_duration(path: Path) -> float:
 
 async def run_cmd(cmd: List[str]) -> None:
     """Run an external command asynchronously and raise on failure."""
-    proc = await asyncio.create_subprocess_exec(*cmd)
-    if await proc.wait() != 0:
-        raise subprocess.CalledProcessError(proc.returncode, cmd)
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        raise subprocess.CalledProcessError(
+            proc.returncode, cmd, output=stdout, stderr=stderr
+        )
 
 
 def build_ffmpeg_inputs(images: List[Path], audios: List[Path], durations: List[float]):
