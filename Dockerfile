@@ -22,4 +22,4 @@ RUN adduser --disabled-password --gecos "" appuser && chown -R appuser /app
 USER appuser
 
 # Default command
-CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "extractor_api:app"]
+CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-c", "gunicorn.conf.py", "extractor_api:app"]

@@ -5,10 +5,13 @@ from __future__ import annotations
 import os
 import time
 from typing import Iterable, Dict, Optional
+import asyncio
 
 import httpx
 
 GRAPH_BASE_URL = os.environ.get("GRAPH_BASE_URL", "https://graph.microsoft.com/v1.0")
+REQUEST_TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "60"))
+CONNECT_TIMEOUT = float(os.environ.get("CONNECT_TIMEOUT", "10"))
 
 # Shared HTTP client for Graph requests
 graph_client: Optional[httpx.AsyncClient] = None
@@ -24,7 +27,8 @@ async def startup_graph_client() -> None:
     """
     global graph_client
     limits = httpx.Limits(max_keepalive_connections=None, max_connections=None)
-    graph_client = httpx.AsyncClient(limits=limits)
+    timeout = httpx.Timeout(connect=CONNECT_TIMEOUT, read=REQUEST_TIMEOUT)
+    graph_client = httpx.AsyncClient(limits=limits, timeout=timeout)
 
 
 async def close_graph_client() -> None:
@@ -80,7 +84,7 @@ async def _auth_headers() -> Dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-async def download_file_from_graph(drive_id: str, item_id: str) -> bytes:
+async def download_file_from_graph(drive_id: str, item_id: str, retries: int = 3) -> bytes:
     """Return the file content for the given drive and item.
 
     This function manually follows redirects. Some environments or older
@@ -92,20 +96,26 @@ async def download_file_from_graph(drive_id: str, item_id: str) -> bytes:
     url = f"{GRAPH_BASE_URL}/drives/{drive_id}/items/{item_id}/content"
     headers = await _auth_headers()
 
-    for _ in range(5):
-        response = await graph_client.get(url, headers=headers)
-        if response.is_redirect:
-            url = response.headers.get("location")
-            if not url:
+    for attempt in range(retries):
+        next_url = url
+        try:
+            for _ in range(5):
+                response = await graph_client.get(next_url, headers=headers)
+                if response.is_redirect:
+                    next_url = response.headers.get("location")
+                    if not next_url:
+                        response.raise_for_status()
+                    continue
                 response.raise_for_status()
-            # continue loop with new URL
-            continue
+                return response.content
+            response.raise_for_status()
+        except httpx.RequestError:
+            if attempt == retries - 1:
+                raise
+            await asyncio.sleep(2 ** attempt)
 
-        response.raise_for_status()
-        return response.content
-
-    # Too many redirects
-    response.raise_for_status()
+    # Retries exhausted
+    raise httpx.HTTPError("Max retries exceeded")
 
 
 async def upload_file_to_graph(

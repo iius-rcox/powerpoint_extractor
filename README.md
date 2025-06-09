@@ -23,15 +23,19 @@ pip install -r requirements.txt
 python extractor_api.py  # Runs with uvicorn on port 8000
 ```
 
-Set `REQUEST_TIMEOUT` to control the download timeout (in seconds). The default
-is `60` seconds.
+Set `REQUEST_TIMEOUT` to control the read timeout (in seconds) when downloading files (default `60`).
+Use `CONNECT_TIMEOUT` to limit how long to wait for an initial connection (default `10`).
+`DOWNLOAD_CONCURRENCY` determines how many files are fetched simultaneously (default `5`).
 ## Environment Variables
 
 You can authenticate with Microsoft Graph using either a pre-generated OAuth token or client credentials.
 
 - `GRAPH_TOKEN` (optional): OAuth bearer token for Microsoft Graph.
 - `GRAPH_CLIENT_ID`, `GRAPH_TENANT_ID`, `GRAPH_CLIENT_SECRET` (optional): if set, the API obtains a token automatically using the client credentials flow.
-- `REQUEST_TIMEOUT` (optional): timeout in seconds when downloading files. Default is `60`.
+- `REQUEST_TIMEOUT` (optional): read timeout in seconds for downloads. Default is `60`.
+- `CONNECT_TIMEOUT` (optional): connection timeout in seconds. Default is `10`.
+- `DOWNLOAD_CONCURRENCY` (optional): number of files downloaded concurrently. Default is `5`.
+- `GUNICORN_TIMEOUT` (optional): worker timeout for Gunicorn in seconds. Default is `300`.
 - `FFPROBE_BIN`, `FFMPEG_BIN`, `LIBREOFFICE_BIN` (optional): paths to the
   `ffprobe`, `ffmpeg` and `libreoffice` executables. These override the
   system defaults used by the `/combine` endpoint.
@@ -39,10 +43,10 @@ You can authenticate with Microsoft Graph using either a pre-generated OAuth tok
 
 ## Deployment
 
-For Azure App Service, configure the startup command:
+For Azure App Service, configure the startup command with a longer timeout:
 
 ```bash
-gunicorn -w 4 -k uvicorn.workers.UvicornWorker extractor_api:app
+gunicorn -w 4 -k uvicorn.workers.UvicornWorker -c gunicorn.conf.py extractor_api:app
 ```
 
 ### Using the container image
@@ -52,7 +56,7 @@ An image is published to GitHub Container Registry as
 Containers:
 
 1. Set the container image to `ghcr.io/iius-rcox/pptx-extractor:latest`.
-2. Leave the startup command empty – the container starts Gunicorn automatically.
+2. Leave the startup command empty – the container starts Gunicorn automatically using `gunicorn.conf.py`.
 3. Set the application setting `WEBSITE_HEALTHCHECK_PATH=/health` so Azure can
    monitor the API.
 
