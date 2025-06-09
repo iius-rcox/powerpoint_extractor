@@ -27,7 +27,12 @@ async def startup_graph_client() -> None:
     """
     global graph_client
     limits = httpx.Limits(max_keepalive_connections=None, max_connections=None)
-    timeout = httpx.Timeout(connect=CONNECT_TIMEOUT, read=REQUEST_TIMEOUT)
+    timeout = httpx.Timeout(
+        connect=CONNECT_TIMEOUT,
+        read=REQUEST_TIMEOUT,
+        write=REQUEST_TIMEOUT,
+        pool=CONNECT_TIMEOUT,
+    )
     graph_client = httpx.AsyncClient(limits=limits, timeout=timeout)
 
 
