@@ -32,6 +32,9 @@ You can authenticate with Microsoft Graph using either a pre-generated OAuth tok
 - `GRAPH_TOKEN` (optional): OAuth bearer token for Microsoft Graph.
 - `GRAPH_CLIENT_ID`, `GRAPH_TENANT_ID`, `GRAPH_CLIENT_SECRET` (optional): if set, the API obtains a token automatically using the client credentials flow.
 - `REQUEST_TIMEOUT` (optional): timeout in seconds when downloading files. Default is `60`.
+- `FFPROBE_BIN`, `FFMPEG_BIN`, `LIBREOFFICE_BIN` (optional): paths to the
+  `ffprobe`, `ffmpeg` and `libreoffice` executables. These override the
+  system defaults used by the `/combine` endpoint.
 
 
 ## Deployment
