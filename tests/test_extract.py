@@ -35,6 +35,10 @@ class FailingPresentation:
         raise ValueError("bad file")
 
 
+@patch(
+    "extractor_api.HTTPX_TIMEOUT",
+    httpx.Timeout(connect=10, read=5, write=5, pool=10),
+)
 @patch("extractor_api.TIMEOUT", 5)
 @patch("extractor_api.http_client.get", new_callable=AsyncMock)
 @patch("extractor_api.Presentation", DummyPresentation)
@@ -49,7 +53,9 @@ def test_accepts_pptx_without_extension(mock_presentation, mock_get):
     )
     assert res.status_code == 200
     mock_get.assert_awaited_once_with(
-        "https://example.com/file", timeout=5, follow_redirects=True
+        "https://example.com/file",
+        timeout=extractor_api.HTTPX_TIMEOUT,
+        follow_redirects=True,
     )
     data = res.json()
     assert data["filename"] == "file.pptx"
@@ -63,6 +69,10 @@ def test_health_endpoint():
     assert res.json() == {"status": "ok"}
 
 
+@patch(
+    "extractor_api.HTTPX_TIMEOUT",
+    httpx.Timeout(connect=10, read=5, write=5, pool=10),
+)
 @patch("extractor_api.TIMEOUT", 5)
 @patch("extractor_api.http_client.get", new_callable=AsyncMock)
 @patch("extractor_api.Presentation", FailingPresentation)
@@ -76,9 +86,15 @@ def test_invalid_pptx_returns_422(mock_presentation, mock_get):
     assert res.status_code == 422
     assert res.json()["detail"] == "Only .pptx files are supported"
     mock_get.assert_awaited_once_with(
-        "https://example.com/file", timeout=5, follow_redirects=True
+        "https://example.com/file",
+        timeout=extractor_api.HTTPX_TIMEOUT,
+        follow_redirects=True,
     )
 
+@patch(
+    "extractor_api.HTTPX_TIMEOUT",
+    httpx.Timeout(connect=10, read=5, write=5, pool=10),
+)
 @patch("extractor_api.TIMEOUT", 5)
 @patch("extractor_api.http_client.get", new_callable=AsyncMock)
 def test_download_http_error(mock_get):
@@ -88,9 +104,17 @@ def test_download_http_error(mock_get):
     res = client.post("/extract", json={"file_url": "https://example.com/file", "file_name": "file.pptx"})
     assert res.status_code == 400
     assert "Unable to download file" in res.json()["detail"]
-    mock_get.assert_awaited_once_with("https://example.com/file", timeout=5, follow_redirects=True)
+    mock_get.assert_awaited_once_with(
+        "https://example.com/file",
+        timeout=extractor_api.HTTPX_TIMEOUT,
+        follow_redirects=True,
+    )
 
 
+@patch(
+    "extractor_api.HTTPX_TIMEOUT",
+    httpx.Timeout(connect=10, read=5, write=5, pool=10),
+)
 @patch("extractor_api.TIMEOUT", 5)
 @patch("extractor_api.http_client.get", new_callable=AsyncMock)
 def test_download_request_error(mock_get):
@@ -98,5 +122,9 @@ def test_download_request_error(mock_get):
     res = client.post("/extract", json={"file_url": "https://example.com/file", "file_name": "file.pptx"})
     assert res.status_code == 400
     assert "Unable to download file" in res.json()["detail"]
-    mock_get.assert_awaited_once_with("https://example.com/file", timeout=5, follow_redirects=True)
+    mock_get.assert_awaited_once_with(
+        "https://example.com/file",
+        timeout=extractor_api.HTTPX_TIMEOUT,
+        follow_redirects=True,
+    )
 
