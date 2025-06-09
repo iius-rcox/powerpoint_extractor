@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from typing import List, Optional
+import re
 from itertools import accumulate
 import asyncio
 
@@ -119,6 +120,15 @@ def _extract_slides(presentation: Presentation) -> List[SlideData]:
         )
         slides.append(SlideData(slide_number=idx, title_text=title, notes_text=notes))
     return slides
+
+
+def _parse_slide_number(path: Path) -> int:
+    """Return the numeric slide number embedded in a filename."""
+    match = re.search(r"(\d+)", path.stem)
+    if match:
+        return int(match.group(1))
+    logger.warning("Unexpected slide filename: %s", path.name)
+    return 0
 
 
 def get_audio_duration(path: Path) -> float:
@@ -311,7 +321,7 @@ async def combine_presentation(request: CombineRequest):
 
         image_files = sorted(
             slides_dir.glob("*.png"),
-            key=lambda p: int(p.stem.split("-")[-1]),
+            key=_parse_slide_number,
         )
 
         if len(image_files) != len(audio_paths):
