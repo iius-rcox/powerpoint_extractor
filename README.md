@@ -26,6 +26,14 @@ python extractor_api.py  # Runs with uvicorn on port 8000
 Set `REQUEST_TIMEOUT` to control the read timeout (in seconds) when downloading files (default `60`).
 Use `CONNECT_TIMEOUT` to limit how long to wait for an initial connection (default `10`).
 `DOWNLOAD_CONCURRENCY` determines how many files are fetched simultaneously (default `5`).
+## Testing
+
+Run the unit tests using **pytest**. Install the project's dependencies first:
+
+```bash
+pip install -r requirements.txt
+pytest
+```
 ## Environment Variables
 
 You can authenticate with Microsoft Graph using either a pre-generated OAuth token or client credentials.
