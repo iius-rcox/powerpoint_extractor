@@ -166,6 +166,13 @@ def get_audio_duration(path: Path) -> float:
     return float(result.stdout.strip())
 
 
+async def calculate_slide_durations(audio_paths: List[Path]) -> List[float]:
+    """Return per-slide durations including crossfade padding."""
+    tasks = [asyncio.to_thread(get_audio_duration, p) for p in audio_paths]
+    mp3_durations = await asyncio.gather(*tasks)
+    return [duration + 2.0 for duration in mp3_durations]
+
+
 async def run_cmd(cmd: List[str]) -> None:
     """Run an external command asynchronously and raise on failure."""
     proc = await asyncio.create_subprocess_exec(
