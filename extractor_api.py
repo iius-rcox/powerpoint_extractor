@@ -6,7 +6,6 @@ import tempfile
 from pathlib import Path
 from typing import List, Optional
 import re
-from itertools import accumulate
 import asyncio
 
 import httpx
@@ -84,7 +83,6 @@ async def shutdown_event() -> None:
 
 # External tool locations can be overridden via environment variables
 FFPROBE_BIN = os.environ.get("FFPROBE_BIN", "ffprobe")
-FFMPEG_BIN = os.environ.get("FFMPEG_BIN", "ffmpeg")
 LIBREOFFICE_BIN = os.environ.get("LIBREOFFICE_BIN", "libreoffice")
 
 
@@ -178,32 +176,6 @@ async def run_cmd(cmd: List[str]) -> None:
         raise subprocess.CalledProcessError(
             proc.returncode, cmd, output=stdout, stderr=stderr
         )
-
-
-def build_ffmpeg_inputs(images: List[Path], audios: List[Path], durations: List[float]):
-    inputs: List[str] = []
-    filters: List[str] = []
-    for idx, (img, audio, dur) in enumerate(zip(images, audios, durations)):
-        inputs.extend(["-loop", "1", "-t", str(dur), "-i", str(img), "-i", str(audio)])
-        filters.append(f"[{2*idx}:v]scale=1280:720,format=yuva420p[v{idx}]")
-        filters.append(f"[{2*idx+1}:a]adelay=1000|1000,apad[a{idx}]")
-    return inputs, filters
-
-
-def build_crossfade_filter(durations: List[float]):
-    video_chain: List[str] = []
-    audio_chain: List[str] = []
-    offsets = [c - 2 for c in accumulate(durations)][:-1]
-    v_prev = "v0"
-    a_prev = "a0"
-    for idx, offset in enumerate(offsets, start=1):
-        video_chain.append(
-            f"[{v_prev}][v{idx}]xfade=transition=fade:duration=2:offset={offset}[vx{idx}]"
-        )
-        audio_chain.append(f"[{a_prev}][a{idx}]acrossfade=d=2[ax{idx}]")
-        v_prev = f"vx{idx}"
-        a_prev = f"ax{idx}"
-    return video_chain, audio_chain, v_prev, a_prev
 
 
 @app.post("/extract", response_model=ExtractResponse)
@@ -303,24 +275,22 @@ async def combine_presentation(request: CombineRequest):
         audio_items.sort(key=lambda x: int(Path(x["name"]).stem.split("_")[-1]))
 
         audio_paths: List[Path] = []
-        durations: List[float] = []
 
         semaphore = asyncio.Semaphore(DOWNLOAD_CONCURRENCY)
 
-        async def fetch_audio(item: dict) -> tuple[Path, float]:
+        async def fetch_audio(item: dict) -> Path:
             async with semaphore:
                 audio_bytes = await asyncio.wait_for(
                     download_file_from_graph(drive_id, item["id"]), timeout=TIMEOUT
                 )
                 audio_path = tmp_path / item["name"]
                 audio_path.write_bytes(audio_bytes)
-                duration = await asyncio.to_thread(get_audio_duration, audio_path)
-                return audio_path, duration
+                await asyncio.to_thread(get_audio_duration, audio_path)
+                return audio_path
 
         results = await asyncio.gather(*(fetch_audio(it) for it in audio_items))
-        for path, dur in results:
+        for path in results:
             audio_paths.append(path)
-            durations.append(dur)
 
         slides_dir = tmp_path / "slides"
         slides_dir.mkdir(exist_ok=True)
@@ -365,29 +335,10 @@ async def combine_presentation(request: CombineRequest):
             )
             raise HTTPException(status_code=400, detail="Slide count mismatch")
 
-        # Prepare ffmpeg inputs and filter graph
-        slide_durations = [d + 2 for d in durations]
-        ffmpeg_inputs, filters = build_ffmpeg_inputs(
-            image_files, audio_paths, slide_durations
-        )
-        video_chain, audio_chain, final_v, final_a = build_crossfade_filter(
-            slide_durations
-        )
-        filter_complex = ";".join(filters + video_chain + audio_chain)
-
         output_path = tmp_path / f"{Path(pptx_name).stem}.mp4"
         cmd = [
-            FFMPEG_BIN,
+            "ffmpeg",
             "-y",
-            *ffmpeg_inputs,
-            "-filter_complex",
-            filter_complex,
-            "-map",
-            f"[{final_v}]",
-            "-map",
-            f"[{final_a}]",
-            "-movflags",
-            "+faststart",
             str(output_path),
         ]
 
