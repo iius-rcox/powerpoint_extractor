@@ -343,9 +343,13 @@ async def combine_presentation(request: CombineRequest):
                 detail="libreoffice is not installed",
             ) from exc
         except subprocess.CalledProcessError as exc:
-            logger.exception("Slide image conversion failed")
+            logger.exception(
+                "Slide image conversion failed: %s",
+                exc.stderr.decode(errors="replace") if exc.stderr else ""
+            )
             raise HTTPException(
-                status_code=500, detail="PPTX conversion failed"
+                status_code=500,
+                detail="PPTX conversion failed",
             ) from exc
 
         image_files = sorted(
@@ -359,6 +363,7 @@ async def combine_presentation(request: CombineRequest):
                 len(image_files),
                 len(audio_paths),
             )
+            raise HTTPException(status_code=400, detail="Slide count mismatch")
 
         # Prepare ffmpeg inputs and filter graph
         slide_durations = [d + 2 for d in durations]

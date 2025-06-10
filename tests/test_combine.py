@@ -210,3 +210,30 @@ def test_combine_libreoffice_missing(
     )
     assert res.status_code == 500
     assert res.json()["detail"] == "libreoffice is not installed"
+
+
+@patch("extractor_api.upload_file_to_graph", new_callable=AsyncMock)
+@patch("extractor_api.run_cmd", new_callable=AsyncMock)
+@patch("extractor_api.list_folder_children", new_callable=AsyncMock)
+@patch("extractor_api.get_item_name", new_callable=AsyncMock)
+@patch("extractor_api.download_file_from_graph", new_callable=AsyncMock)
+def test_combine_slide_count_mismatch(
+    mock_download, mock_get_name, mock_list, mock_run, mock_upload
+):
+    mock_download.side_effect = lambda d, i: b"data"
+    mock_get_name.return_value = "slides.pptx"
+    mock_list.return_value = [
+        {"id": "a1", "name": "slide_1.mp3"},
+        {"id": "a2", "name": "slide_2.mp3"},
+        {"id": "a3", "name": "slide_3.mp3"},
+    ]
+    mock_run.side_effect = _run_factory(["Slide-1.png", "Slide-2.png"])
+    mock_upload.return_value = "http://example.com/video.mp4"
+
+    res = client.post(
+        "/combine",
+        json={"drive_id": "d", "folder_id": "f", "pptx_file_id": "p"},
+    )
+
+    assert res.status_code == 400
+    assert res.json()["detail"] == "Slide count mismatch"
