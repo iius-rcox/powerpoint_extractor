@@ -27,6 +27,17 @@ python extractor_api.py  # Runs with uvicorn on port 8000
 Set `REQUEST_TIMEOUT` to control the read timeout (in seconds) when downloading files (default `60`).
 Use `CONNECT_TIMEOUT` to limit how long to wait for an initial connection (default `10`).
 `DOWNLOAD_CONCURRENCY` determines how many files are fetched simultaneously (default `5`).
+
+## Running with Docker
+
+Build the container image locally and start it using Docker:
+
+```bash
+docker build -t pptx-extractor .
+docker run -p 8000:80 pptx-extractor
+```
+
+The API will be available at `http://localhost:8000`.
 ## Testing
 
 Run the unit tests using **pytest**. Install the project's dependencies first:
