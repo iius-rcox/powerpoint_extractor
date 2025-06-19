@@ -9,9 +9,10 @@ import re
 import asyncio
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl
+from weasyprint import HTML
 from pptx import Presentation
 
 from graph_utils import (
@@ -115,6 +116,10 @@ class CombineResponse(BaseModel):
     upload_url: str
 
 
+class HtmlToPdfRequest(BaseModel):
+    html: str
+
+
 def _extract_slides(presentation: Presentation) -> List[SlideData]:
     """Return slide metadata from a Presentation."""
     slides = []
@@ -136,6 +141,16 @@ def _parse_slide_number(path: Path) -> int:
         return int(match.group(1))
     logger.warning("Unexpected slide filename: %s", path.name)
     return 0
+
+
+def _html_to_pdf_bytes(html: str) -> bytes:
+    """Return PDF data generated from HTML."""
+    buf = io.BytesIO()
+    try:
+        HTML(string=html).write_pdf(target=buf)
+    except Exception as exc:  # pylint: disable=broad-except
+        raise ValueError("pdf generation failed") from exc
+    return buf.getvalue()
 
 
 def get_audio_duration(path: Path) -> float:
@@ -229,6 +244,28 @@ async def extract_notes(request: ExtractRequest):
         slide_count=len(slides_data),
         slides=slides_data,
     )
+
+
+@app.post("/html-to-pdf/async")
+async def html_to_pdf_async(request: HtmlToPdfRequest) -> Response:
+    """Generate a PDF from provided HTML text asynchronously."""
+    try:
+        pdf_bytes = await asyncio.to_thread(_html_to_pdf_bytes, request.html)
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.exception("PDF generation failed")
+        raise HTTPException(status_code=500, detail="PDF generation failed") from exc
+    return Response(content=pdf_bytes, media_type="application/pdf")
+
+
+@app.post("/html-to-pdf")
+def html_to_pdf(request: HtmlToPdfRequest) -> Response:
+    """Generate a PDF from provided HTML text synchronously."""
+    try:
+        pdf_bytes = _html_to_pdf_bytes(request.html)
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.exception("PDF generation failed")
+        raise HTTPException(status_code=500, detail="PDF generation failed") from exc
+    return Response(content=pdf_bytes, media_type="application/pdf")
 
 
 @app.post("/combine", response_model=CombineResponse)

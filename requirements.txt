@@ -4,3 +4,4 @@ python-pptx
 requests
 gunicorn
 httpx
+weasyprint
