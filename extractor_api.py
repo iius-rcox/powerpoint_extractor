@@ -12,7 +12,7 @@ import httpx
 from fastapi import FastAPI, HTTPException, Response, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl
-from weasyprint import HTML
+from weasyprint import HTML, CSS
 from pptx import Presentation
 
 from graph_utils import (
@@ -152,7 +152,8 @@ def _html_to_pdf_bytes(html_bytes: bytes) -> bytes:
     buf = io.BytesIO()
     try:
         html = html_bytes.decode()
-        HTML(string=html).write_pdf(target=buf)
+        css = CSS(string="@page { size: A4 landscape; margin: 1cm }")
+        HTML(string=html).write_pdf(target=buf, stylesheets=[css])
     except UnicodeDecodeError as exc:
         logger.error("Invalid HTML encoding: %s", exc)
         raise PdfGenerationError("invalid html encoding") from exc
