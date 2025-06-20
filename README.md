@@ -99,3 +99,21 @@ curl -X POST http://localhost:8000/combine \
   -H "Content-Type: application/json" \
   -d '{"drive_id": "<drive>", "folder_id": "<folder>", "pptx_file_id": "<id>"}'
 ```
+
+### Example HTML to PDF Request
+
+```bash
+curl -X POST http://localhost:8000/html-to-pdf \
+  -H "Content-Type: text/html" \
+  --data '<h1>Hello</h1>' \
+  -o output.pdf
+```
+
+### Example HTML to PDF Async Request
+
+```bash
+curl -X POST http://localhost:8000/html-to-pdf/async \
+  -H "Content-Type: text/html" \
+  --data '<h1>Hello</h1>' \
+  -o output.pdf
+```
