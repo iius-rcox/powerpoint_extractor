@@ -153,7 +153,11 @@ def _html_to_pdf_bytes(html_bytes: bytes) -> bytes:
     try:
         html = html_bytes.decode()
         css = CSS(string="@page { size: A4 landscape; margin: 1cm }")
-        HTML(string=html).write_pdf(target=buf, stylesheets=[css])
+        HTML(string=html).write_pdf(
+            target=buf,
+            stylesheets=[css],
+            presentational_hints=True,
+        )
     except UnicodeDecodeError as exc:
         logger.error("Invalid HTML encoding: %s", exc)
         raise PdfGenerationError("invalid html encoding") from exc
