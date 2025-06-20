@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Optional
 import re
 import asyncio
+import base64
 
 import httpx
 from fastapi import FastAPI, HTTPException, Response, Body
@@ -144,11 +145,12 @@ def _parse_slide_number(path: Path) -> int:
     return 0
 
 
-def _html_to_pdf_bytes(html: bytes) -> bytes:
-    """Return PDF data generated from HTML bytes."""
+def _html_to_pdf_bytes(html_b64: bytes) -> bytes:
+    """Return PDF data generated from base64 encoded HTML."""
     buf = io.BytesIO()
     try:
-        HTML(string=html.decode()).write_pdf(target=buf)
+        html = base64.b64decode(html_b64).decode()
+        HTML(string=html).write_pdf(target=buf)
     except Exception as exc:  # pylint: disable=broad-except
         raise ValueError("pdf generation failed") from exc
     return buf.getvalue()
@@ -248,10 +250,10 @@ async def extract_notes(request: ExtractRequest):
 
 
 @app.post("/html-to-pdf/async")
-async def html_to_pdf_async(html: bytes = Body(...)) -> Response:
-    """Generate a PDF from provided HTML bytes asynchronously."""
+async def html_to_pdf_async(html_b64: bytes = Body(...)) -> Response:
+    """Generate a PDF from provided base64 HTML asynchronously."""
     try:
-        pdf_bytes = await asyncio.to_thread(_html_to_pdf_bytes, html)
+        pdf_bytes = await asyncio.to_thread(_html_to_pdf_bytes, html_b64)
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("PDF generation failed")
         raise HTTPException(status_code=500, detail="PDF generation failed") from exc
@@ -259,10 +261,10 @@ async def html_to_pdf_async(html: bytes = Body(...)) -> Response:
 
 
 @app.post("/html-to-pdf")
-def html_to_pdf(html: bytes = Body(...)) -> Response:
-    """Generate a PDF from provided HTML bytes synchronously."""
+def html_to_pdf(html_b64: bytes = Body(...)) -> Response:
+    """Generate a PDF from provided base64 HTML synchronously."""
     try:
-        pdf_bytes = _html_to_pdf_bytes(html)
+        pdf_bytes = _html_to_pdf_bytes(html_b64)
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("PDF generation failed")
         raise HTTPException(status_code=500, detail="PDF generation failed") from exc

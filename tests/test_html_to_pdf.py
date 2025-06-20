@@ -1,4 +1,5 @@
 from unittest.mock import patch
+import base64
 
 from fastapi.testclient import TestClient
 
@@ -22,7 +23,8 @@ class FailingHTML(DummyHTML):
 
 def test_html_to_pdf_sync_success():
     with patch("extractor_api.HTML", DummyHTML):
-        res = client.post("/html-to-pdf", data=b"<h1>Hi</h1>")
+        payload = base64.b64encode(b"<h1>Hi</h1>")
+        res = client.post("/html-to-pdf", data=payload)
     assert res.status_code == 200
     assert res.headers["content-type"] == "application/pdf"
     assert res.content.startswith(b"%PDF")
@@ -30,7 +32,8 @@ def test_html_to_pdf_sync_success():
 
 def test_html_to_pdf_async_success():
     with patch("extractor_api.HTML", DummyHTML):
-        res = client.post("/html-to-pdf/async", data=b"<h1>Hi</h1>")
+        payload = base64.b64encode(b"<h1>Hi</h1>")
+        res = client.post("/html-to-pdf/async", data=payload)
     assert res.status_code == 200
     assert res.headers["content-type"] == "application/pdf"
     assert res.content.startswith(b"%PDF")
@@ -38,6 +41,7 @@ def test_html_to_pdf_async_success():
 
 def test_html_to_pdf_failure():
     with patch("extractor_api.HTML", FailingHTML):
-        res = client.post("/html-to-pdf/async", data=b"<h1>Hi</h1>")
+        payload = base64.b64encode(b"<h1>Hi</h1>")
+        res = client.post("/html-to-pdf/async", data=payload)
     assert res.status_code == 500
     assert res.json()["detail"] == "PDF generation failed"
