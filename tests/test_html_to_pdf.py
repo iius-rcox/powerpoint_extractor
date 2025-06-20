@@ -11,12 +11,12 @@ class DummyHTML:
     def __init__(self, string):
         self.string = string
 
-    def write_pdf(self, target):
+    def write_pdf(self, target, stylesheets=None, presentational_hints=False):
         target.write(b"%PDF-1.7")
 
 
 class FailingHTML(DummyHTML):
-    def write_pdf(self, target):
+    def write_pdf(self, target, stylesheets=None, presentational_hints=False):
         raise RuntimeError("fail")
 
 

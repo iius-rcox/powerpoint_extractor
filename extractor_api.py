@@ -152,7 +152,10 @@ def _html_to_pdf_bytes(html_bytes: bytes) -> bytes:
     buf = io.BytesIO()
     try:
         html = html_bytes.decode()
-        HTML(string=html).write_pdf(target=buf)
+        HTML(string=html).write_pdf(
+            target=buf,
+            presentational_hints=True,
+        )
     except UnicodeDecodeError as exc:
         logger.error("Invalid HTML encoding: %s", exc)
         raise PdfGenerationError("invalid html encoding") from exc
