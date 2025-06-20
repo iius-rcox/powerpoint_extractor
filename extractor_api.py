@@ -9,7 +9,7 @@ import re
 import asyncio
 
 import httpx
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl
 from weasyprint import HTML
@@ -116,8 +116,9 @@ class CombineResponse(BaseModel):
     upload_url: str
 
 
-class HtmlToPdfRequest(BaseModel):
-    html: str
+
+# HTML to PDF conversion now accepts raw HTML bytes rather than text.
+
 
 
 def _extract_slides(presentation: Presentation) -> List[SlideData]:
@@ -143,11 +144,11 @@ def _parse_slide_number(path: Path) -> int:
     return 0
 
 
-def _html_to_pdf_bytes(html: str) -> bytes:
-    """Return PDF data generated from HTML."""
+def _html_to_pdf_bytes(html: bytes) -> bytes:
+    """Return PDF data generated from HTML bytes."""
     buf = io.BytesIO()
     try:
-        HTML(string=html).write_pdf(target=buf)
+        HTML(string=html.decode()).write_pdf(target=buf)
     except Exception as exc:  # pylint: disable=broad-except
         raise ValueError("pdf generation failed") from exc
     return buf.getvalue()
@@ -247,10 +248,10 @@ async def extract_notes(request: ExtractRequest):
 
 
 @app.post("/html-to-pdf/async")
-async def html_to_pdf_async(request: HtmlToPdfRequest) -> Response:
-    """Generate a PDF from provided HTML text asynchronously."""
+async def html_to_pdf_async(html: bytes = Body(...)) -> Response:
+    """Generate a PDF from provided HTML bytes asynchronously."""
     try:
-        pdf_bytes = await asyncio.to_thread(_html_to_pdf_bytes, request.html)
+        pdf_bytes = await asyncio.to_thread(_html_to_pdf_bytes, html)
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("PDF generation failed")
         raise HTTPException(status_code=500, detail="PDF generation failed") from exc
@@ -258,10 +259,10 @@ async def html_to_pdf_async(request: HtmlToPdfRequest) -> Response:
 
 
 @app.post("/html-to-pdf")
-def html_to_pdf(request: HtmlToPdfRequest) -> Response:
-    """Generate a PDF from provided HTML text synchronously."""
+def html_to_pdf(html: bytes = Body(...)) -> Response:
+    """Generate a PDF from provided HTML bytes synchronously."""
     try:
-        pdf_bytes = _html_to_pdf_bytes(request.html)
+        pdf_bytes = _html_to_pdf_bytes(html)
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("PDF generation failed")
         raise HTTPException(status_code=500, detail="PDF generation failed") from exc
