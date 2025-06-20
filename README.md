@@ -6,7 +6,7 @@ This API extracts slide titles and notes from `.pptx` files. It is built with **
 
 - **POST `/extract`** – Accepts a JSON payload with `file_url` and `file_name`. The `file_url` should point to a downloadable `.pptx` file while `file_name` will be returned in the response. Returns the slide titles and speaker notes for each slide.
 - **POST `/combine`** – Takes a `drive_id`, `folder_id` and `pptx_file_id` and produces an MP4 by downloading the PPTX and slide audio from SharePoint, creating slide images and stitching them together with 2 s crossfades. The resulting video is uploaded back to SharePoint and the URL returned.
-- **POST `/html-to-pdf`** and **POST `/html-to-pdf/async`** – Convert provided HTML into a PDF, synchronously or asynchronously.
+- **POST `/html-to-pdf`** and **POST `/html-to-pdf/async`** – Convert provided HTML bytes into a PDF, synchronously or asynchronously.
 - Validation for supported file types and error handling for download/parse failures.
 - CORS enabled for testing purposes.
 - Suitable for running locally with `uvicorn` or in production with `gunicorn`.
