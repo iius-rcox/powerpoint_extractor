@@ -152,7 +152,11 @@ def _html_to_pdf_bytes(html_bytes: bytes) -> bytes:
     buf = io.BytesIO()
     try:
         html = html_bytes.decode()
-        css = CSS(string="@page { size: A4 landscape; margin: 1cm }")
+        # Explicitly set the page size in landscape orientation to avoid
+        # clipping wide content. Some versions of WeasyPrint have trouble
+        # parsing ``A4 landscape`` so we specify the width and height
+        # directly.
+        css = CSS(string="@page { size: 29.7cm 21cm; margin: 1cm }")
         HTML(string=html).write_pdf(
             target=buf,
             stylesheets=[css],
