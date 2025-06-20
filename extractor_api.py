@@ -120,6 +120,8 @@ class CombineResponse(BaseModel):
 # HTML to PDF conversion uses raw HTML bytes rather than base64.
 
 
+class PdfGenerationError(Exception):
+    """Raised when HTML to PDF conversion fails."""
 
 def _extract_slides(presentation: Presentation) -> List[SlideData]:
     """Return slide metadata from a Presentation."""
@@ -146,12 +148,17 @@ def _parse_slide_number(path: Path) -> int:
 
 def _html_to_pdf_bytes(html_bytes: bytes) -> bytes:
     """Return PDF data generated from raw HTML bytes."""
+    logger.debug("Converting %d HTML bytes to PDF", len(html_bytes))
     buf = io.BytesIO()
     try:
         html = html_bytes.decode()
         HTML(string=html).write_pdf(target=buf)
+    except UnicodeDecodeError as exc:
+        logger.error("Invalid HTML encoding: %s", exc)
+        raise PdfGenerationError("invalid html encoding") from exc
     except Exception as exc:  # pylint: disable=broad-except
-        raise ValueError("pdf generation failed") from exc
+        logger.exception("WeasyPrint PDF generation failed")
+        raise PdfGenerationError("pdf generation failed") from exc
     return buf.getvalue()
 
 
@@ -251,10 +258,14 @@ async def extract_notes(request: ExtractRequest):
 @app.post("/html-to-pdf/async")
 async def html_to_pdf_async(html_bytes: bytes = Body(...)) -> Response:
     """Generate a PDF from provided raw HTML asynchronously."""
+    logger.debug("/html-to-pdf/async request with %d bytes", len(html_bytes))
     try:
         pdf_bytes = await asyncio.to_thread(_html_to_pdf_bytes, html_bytes)
+    except PdfGenerationError as exc:
+        logger.error("PDF generation failed: %s", exc)
+        raise HTTPException(status_code=500, detail="PDF generation failed") from exc
     except Exception as exc:  # pylint: disable=broad-except
-        logger.exception("PDF generation failed")
+        logger.exception("Unexpected error during PDF generation")
         raise HTTPException(status_code=500, detail="PDF generation failed") from exc
     return Response(content=pdf_bytes, media_type="application/pdf")
 
@@ -262,10 +273,14 @@ async def html_to_pdf_async(html_bytes: bytes = Body(...)) -> Response:
 @app.post("/html-to-pdf")
 def html_to_pdf(html_bytes: bytes = Body(...)) -> Response:
     """Generate a PDF from provided raw HTML synchronously."""
+    logger.debug("/html-to-pdf request with %d bytes", len(html_bytes))
     try:
         pdf_bytes = _html_to_pdf_bytes(html_bytes)
+    except PdfGenerationError as exc:
+        logger.error("PDF generation failed: %s", exc)
+        raise HTTPException(status_code=500, detail="PDF generation failed") from exc
     except Exception as exc:  # pylint: disable=broad-except
-        logger.exception("PDF generation failed")
+        logger.exception("Unexpected error during PDF generation")
         raise HTTPException(status_code=500, detail="PDF generation failed") from exc
     return Response(content=pdf_bytes, media_type="application/pdf")
 
